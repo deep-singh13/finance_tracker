@@ -14,8 +14,8 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // Express 5 compatible SPA fallback
-  app.get("/*", (_req, res) => {
+  // Express 5 compatible SPA fallback (regex version)
+  app.use(/.*/, (_req, res) => {
     res.sendFile(path.join(distPath, "index.html"));
   });
 }
