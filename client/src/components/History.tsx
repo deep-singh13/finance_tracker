@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { format, parseISO, startOfMonth, isSameMonth, subMonths, eachMonthOfInterval } from "date-fns";
+import { format, parseISO, startOfMonth, isSameMonth, eachMonthOfInterval } from "date-fns";
 import { type ExpenseResponse } from "@shared/routes";
 import { CategoryIcon } from "./CategoryIcon";
 import { useExpenses } from "@/hooks/use-expenses";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExpenseModal } from "./ExpenseModal";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, Plus } from "lucide-react";
 
 export function History() {
   const { data: expenses, isLoading } = useExpenses();
@@ -70,9 +70,18 @@ export function History() {
     <div className="min-h-screen bg-background text-foreground pb-24">
       <header className="px-5 pt-12 pb-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10 border-b border-transparent transition-all">
         <div className="max-w-2xl mx-auto flex flex-col gap-4">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-            History
-          </h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+              History
+            </h1>
+            <div className="md:hidden">
+              <ExpenseModal>
+                <button type="button" className="bg-primary text-primary-foreground p-2 rounded-full shadow-md hover:bg-primary/90 transition-transform active:scale-95">
+                  <Plus className="w-5 h-5" />
+                </button>
+              </ExpenseModal>
+            </div>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
@@ -155,6 +164,14 @@ export function History() {
           </div>
         )}
       </main>
+
+      <div className="hidden md:block fixed bottom-24 right-8 z-[60]">
+        <ExpenseModal>
+          <button type="button" className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 font-semibold text-lg">
+            <Plus className="w-6 h-6" /> Add Expense
+          </button>
+        </ExpenseModal>
+      </div>
     </div>
   );
 }

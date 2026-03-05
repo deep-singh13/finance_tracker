@@ -317,9 +317,9 @@ export default function Dashboard() {
         <ExpenseList expenses={expenses} isLoading={isLoading} />
       </main>
 
-      <div className="hidden md:block fixed bottom-8 right-8 z-50">
+      <div className="hidden md:block fixed bottom-24 right-8 z-[60]">
         <ExpenseModal>
-          <button className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 font-semibold text-lg">
+          <button type="button" className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 font-semibold text-lg">
             <Plus className="w-6 h-6" /> Add Expense
           </button>
         </ExpenseModal>

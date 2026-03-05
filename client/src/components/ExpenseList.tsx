@@ -149,6 +149,14 @@ export function ExpenseList({ expenses, isLoading }: ExpenseListProps) {
         >
           Export CSV
         </Button>
+        <ExpenseModal>
+          <Button
+            variant="default"
+            className="w-full rounded-xl text-[13px] font-semibold"
+          >
+            Add Expense
+          </Button>
+        </ExpenseModal>
       </div>
 
       <ExpenseModal 
