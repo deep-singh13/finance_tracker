@@ -98,7 +98,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
         <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-6">
           <div className="relative flex justify-center py-4">
             <div className="flex items-baseline justify-center max-w-[80%]">
-              <span className="text-3xl font-medium text-muted-foreground mr-1 translate-y-[-2px]">$</span>
+              <span className="text-3xl font-medium text-muted-foreground mr-1 translate-y-[-2px]">₹</span>
               <input
                 type="text"
                 inputMode="decimal"

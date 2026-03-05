@@ -153,7 +153,7 @@ export default function Dashboard() {
               Today
             </span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg text-muted-foreground font-medium">$</span>
+              <span className="text-lg text-muted-foreground font-medium">₹</span>
               <span className="text-2xl font-bold tracking-tight text-foreground">
                 {formatAmount(todayTotal)}
               </span>
@@ -165,7 +165,7 @@ export default function Dashboard() {
               This Week
             </span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg text-muted-foreground font-medium">$</span>
+              <span className="text-lg text-muted-foreground font-medium">₹</span>
               <span className="text-2xl font-bold tracking-tight text-foreground">
                 {formatAmount(weekTotal)}
               </span>
@@ -177,7 +177,7 @@ export default function Dashboard() {
               This Month
             </span>
             <div className="flex items-baseline gap-1">
-              <span className="text-lg text-muted-foreground font-medium">$</span>
+              <span className="text-lg text-muted-foreground font-medium">₹</span>
               <span className="text-2xl font-bold tracking-tight text-foreground">
                 {formatAmount(monthTotal)}
               </span>
@@ -208,7 +208,7 @@ export default function Dashboard() {
                       ))}
                     </Pie>
                     <Tooltip 
-                      formatter={(value: number) => `$${value.toFixed(2)}`}
+                      formatter={(value: number) => `₹${value.toFixed(2)}`}
                       contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                     />
                     <Legend verticalAlign="bottom" height={36}/>
@@ -224,19 +224,19 @@ export default function Dashboard() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Spent</span>
-                  <span className="font-semibold">${formatAmount(monthlyInsights?.total || 0)}</span>
+                  <span className="font-semibold">₹{formatAmount(monthlyInsights?.total || 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Top Category</span>
                   <span className="font-semibold">
                     {monthlyInsights?.topCategory 
-                      ? `${monthlyInsights.topCategory.name} ($${formatAmount(monthlyInsights.topCategory.amount)})`
+                      ? `${monthlyInsights.topCategory.name} (₹${formatAmount(monthlyInsights.topCategory.amount)})`
                       : "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Daily Average</span>
-                  <span className="font-semibold">${formatAmount(monthlyInsights?.dailyAvg || 0)}</span>
+                  <span className="font-semibold">₹{formatAmount(monthlyInsights?.dailyAvg || 0)}</span>
                 </div>
               </div>
             </div>
@@ -258,8 +258,8 @@ export default function Dashboard() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-[13px]">
-                    <span className="text-muted-foreground">Budget: ${formatAmount(budget)}</span>
-                    <span className="text-muted-foreground">Spent: ${formatAmount(monthTotal)}</span>
+                    <span className="text-muted-foreground">Budget: ₹{formatAmount(budget)}</span>
+                    <span className="text-muted-foreground">Spent: ₹{formatAmount(monthTotal)}</span>
                   </div>
                   <Progress value={budgetProgress} className="h-2" />
                   <div className="text-right">
@@ -267,7 +267,7 @@ export default function Dashboard() {
                       "text-[15px] font-bold",
                       remaining < 0 ? "text-destructive" : "text-primary"
                     )}>
-                      {remaining < 0 ? "Over by: " : "Remaining: "}${formatAmount(Math.abs(remaining))}
+                      {remaining < 0 ? "Over by: " : "Remaining: "}₹{formatAmount(Math.abs(remaining))}
                     </span>
                   </div>
                 </div>
@@ -287,7 +287,7 @@ export default function Dashboard() {
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
                       <Tooltip 
-                        formatter={(value: number) => `$${value.toFixed(2)}`}
+                        formatter={(value: number) => `₹${value.toFixed(2)}`}
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       />
                       <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
@@ -302,7 +302,7 @@ export default function Dashboard() {
                       <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
                       <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
                       <Tooltip 
-                        formatter={(value: number) => `$${value.toFixed(2)}`}
+                        formatter={(value: number) => `₹${value.toFixed(2)}`}
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       />
                       <Bar dataKey="total" fill="#AF52DE" radius={[4, 4, 0, 0]} />
