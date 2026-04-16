@@ -3,7 +3,18 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { createOAuth2Client, getAuthUrl, fetchTransactionEmails } from "./gmail";
+
+const parsedTransactionSchema = z.object({
+  amount: z.number().positive(),       // in paise
+  description: z.string().min(1),
+  category: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  externalId: z.string().min(1),       // Gmail message ID for deduplication
+});
+
+const syncPayloadSchema = z.object({
+  transactions: z.array(parsedTransactionSchema),
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -87,86 +98,36 @@ export async function registerRoutes(
     }
   });
 
-  // ── Gmail OAuth & Sync Routes ──────────────────────────────────────────────
+  // ── Gmail Sync Routes ──────────────────────────────────────────────────────
+  // Transactions are pushed HERE by the /sync-gmail Claude Code skill.
+  // The skill uses the Gmail MCP connector (available in Claude Code) to read
+  // emails and parse transactions, then POSTs them to this endpoint.
+  // No Google Cloud account required.
 
-  // GET /api/gmail/status — connection state + last sync time
+  // GET /api/gmail/status — returns last sync timestamp
   app.get("/api/gmail/status", async (_req, res) => {
     const record = await storage.getGmailSync();
-    if (!record?.refreshToken) {
-      const authUrl = process.env.GOOGLE_CLIENT_ID
-        ? getAuthUrl(createOAuth2Client())
-        : null;
-      return res.json({ connected: false, lastSyncedAt: null, authUrl });
-    }
-    return res.json({
-      connected: true,
-      lastSyncedAt: record.lastSyncedAt,
-      authUrl: null,
-    });
+    res.json({ lastSyncedAt: record?.lastSyncedAt ?? null });
   });
 
-  // GET /api/gmail/auth — redirect to Google consent screen
-  app.get("/api/gmail/auth", (_req, res) => {
-    if (!process.env.GOOGLE_CLIENT_ID) {
-      return res.status(503).json({ message: "Gmail integration not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI." });
-    }
-    const url = getAuthUrl(createOAuth2Client());
-    res.redirect(url);
-  });
-
-  // GET /api/gmail/callback — Google redirects here with ?code=...
-  app.get("/api/gmail/callback", async (req, res) => {
-    const code = req.query.code as string | undefined;
-    if (!code) return res.status(400).send("Missing authorization code");
-
-    try {
-      const oauth2Client = createOAuth2Client();
-      const { tokens } = await oauth2Client.getToken(code);
-      await storage.upsertGmailSync({
-        accessToken: tokens.access_token ?? null,
-        refreshToken: tokens.refresh_token ?? null,
-        tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
-        lastSyncedAt: null,
-      });
-      // Redirect back to app root after connecting
-      res.redirect("/?gmail=connected");
-    } catch (err) {
-      console.error("Gmail OAuth callback error:", err);
-      res.status(500).send("Failed to complete Gmail authorization");
-    }
-  });
-
-  // POST /api/gmail/sync — fetch emails since last sync and import transactions
-  app.post("/api/gmail/sync", async (_req, res) => {
-    const record = await storage.getGmailSync();
-    if (!record?.refreshToken) {
-      return res.status(401).json({ message: "Gmail not connected. Visit /api/gmail/auth first." });
+  // POST /api/gmail/sync — accepts parsed transactions from the Claude Code skill
+  // Optionally protected by SYNC_API_KEY env var (set same key in your skill env)
+  app.post("/api/gmail/sync", async (req, res) => {
+    const apiKey = process.env.SYNC_API_KEY;
+    if (apiKey) {
+      const provided = req.headers["x-sync-key"];
+      if (provided !== apiKey) {
+        return res.status(401).json({ message: "Invalid or missing X-Sync-Key header" });
+      }
     }
 
     try {
-      const oauth2Client = createOAuth2Client();
-      oauth2Client.setCredentials({
-        access_token: record.accessToken,
-        refresh_token: record.refreshToken,
-        expiry_date: record.tokenExpiry ? record.tokenExpiry.getTime() : undefined,
-      });
-
-      // googleapis auto-refreshes access tokens using the refresh token
-      oauth2Client.on("tokens", async (tokens) => {
-        await storage.upsertGmailSync({
-          accessToken: tokens.access_token ?? record.accessToken,
-          tokenExpiry: tokens.expiry_date ? new Date(tokens.expiry_date) : record.tokenExpiry,
-        });
-      });
-
-      const transactions = await fetchTransactionEmails(oauth2Client, record.lastSyncedAt);
+      const { transactions } = syncPayloadSchema.parse(req.body);
 
       let imported = 0;
       for (const tx of transactions) {
-        // Deduplicate by Gmail message ID
         const exists = await storage.expenseExistsByExternalId(tx.externalId);
         if (exists) continue;
-
         await storage.createExpense({
           amount: tx.amount,
           description: tx.description,
@@ -178,13 +139,13 @@ export async function registerRoutes(
         imported++;
       }
 
-      // Update last sync timestamp
       await storage.upsertGmailSync({ lastSyncedAt: new Date() });
-
       return res.json({ imported, total: transactions.length, lastSyncedAt: new Date() });
     } catch (err) {
-      console.error("Gmail sync error:", err);
-      return res.status(500).json({ message: "Gmail sync failed. Please reconnect." });
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
     }
   });
 
