@@ -34,9 +34,9 @@ export function History() {
   }, [filteredExpenses]);
 
   const formatAmount = (cents: number) => {
-    return (cents / 100).toLocaleString("en-US", {
+    return (cents / 100).toLocaleString("en-IN", {
       style: "currency",
-      currency: "USD",
+      currency: "INR",
     });
   };
 

@@ -2,12 +2,14 @@ import { db } from "./db";
 import {
   expenses,
   budgets,
+  gmailSync,
   type CreateExpenseRequest,
   type UpdateExpenseRequest,
   type ExpenseResponse,
   type ExpensesListResponse,
   type Budget,
-  type InsertBudget
+  type InsertBudget,
+  type GmailSync,
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -19,6 +21,9 @@ export interface IStorage {
   deleteExpense(id: number): Promise<void>;
   getBudget(month: string): Promise<Budget | undefined>;
   setBudget(budget: InsertBudget): Promise<Budget>;
+  getGmailSync(): Promise<GmailSync | undefined>;
+  upsertGmailSync(data: Partial<GmailSync>): Promise<GmailSync>;
+  expenseExistsByExternalId(externalId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -64,6 +69,32 @@ export class DatabaseStorage implements IStorage {
     }
     const [inserted] = await db.insert(budgets).values(insertBudget).returning();
     return inserted;
+  }
+
+  async getGmailSync(): Promise<GmailSync | undefined> {
+    const [record] = await db.select().from(gmailSync).limit(1);
+    return record;
+  }
+
+  async upsertGmailSync(data: Partial<GmailSync>): Promise<GmailSync> {
+    const [existing] = await db.select().from(gmailSync).limit(1);
+    if (existing) {
+      const [updated] = await db.update(gmailSync)
+        .set(data)
+        .where(eq(gmailSync.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [inserted] = await db.insert(gmailSync).values(data as any).returning();
+    return inserted;
+  }
+
+  async expenseExistsByExternalId(externalId: string): Promise<boolean> {
+    const [found] = await db.select({ id: expenses.id })
+      .from(expenses)
+      .where(eq(expenses.externalId, externalId))
+      .limit(1);
+    return !!found;
   }
 }
 

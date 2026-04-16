@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ExpenseModal } from "./ExpenseModal";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { GmailSyncButton } from "./GmailSyncButton";
 
 interface ExpenseListProps {
   expenses: ExpenseResponse[] | undefined;
@@ -84,9 +85,9 @@ export function ExpenseList({ expenses, isLoading }: ExpenseListProps) {
   };
 
   const formatAmount = (cents: number) => {
-    return (cents / 100).toLocaleString("en-US", {
+    return (cents / 100).toLocaleString("en-IN", {
       style: "currency",
-      currency: "USD",
+      currency: "INR",
     });
   };
 
@@ -142,8 +143,9 @@ export function ExpenseList({ expenses, isLoading }: ExpenseListProps) {
             className="pl-9 rounded-xl bg-card border-border/50"
           />
         </div>
-        <Button 
-          variant="outline" 
+        <GmailSyncButton />
+        <Button
+          variant="outline"
           onClick={handleExportCSV}
           className="w-full rounded-xl border-border/50 text-[13px] font-semibold"
         >
