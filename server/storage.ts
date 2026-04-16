@@ -3,6 +3,8 @@ import {
   expenses,
   budgets,
   gmailSync,
+  investments,
+  subscriptions,
   type CreateExpenseRequest,
   type UpdateExpenseRequest,
   type ExpenseResponse,
@@ -10,6 +12,10 @@ import {
   type Budget,
   type InsertBudget,
   type GmailSync,
+  type Investment,
+  type InsertInvestment,
+  type Subscription,
+  type InsertSubscription,
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -24,6 +30,16 @@ export interface IStorage {
   getGmailSync(): Promise<GmailSync | undefined>;
   upsertGmailSync(data: Partial<GmailSync>): Promise<GmailSync>;
   expenseExistsByExternalId(externalId: string): Promise<boolean>;
+  // Investments
+  getInvestments(): Promise<Investment[]>;
+  createInvestment(data: InsertInvestment): Promise<Investment>;
+  updateInvestment(id: number, data: Partial<InsertInvestment>): Promise<Investment>;
+  deleteInvestment(id: number): Promise<void>;
+  // Subscriptions
+  getSubscriptions(): Promise<Subscription[]>;
+  createSubscription(data: InsertSubscription): Promise<Subscription>;
+  updateSubscription(id: number, data: Partial<InsertSubscription>): Promise<Subscription>;
+  deleteSubscription(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -95,6 +111,46 @@ export class DatabaseStorage implements IStorage {
       .where(eq(expenses.externalId, externalId))
       .limit(1);
     return !!found;
+  }
+
+  // ── Investments ────────────────────────────────────────────────────────────
+
+  async getInvestments(): Promise<Investment[]> {
+    return await db.select().from(investments).orderBy(desc(investments.createdAt));
+  }
+
+  async createInvestment(data: InsertInvestment): Promise<Investment> {
+    const [row] = await db.insert(investments).values(data).returning();
+    return row;
+  }
+
+  async updateInvestment(id: number, data: Partial<InsertInvestment>): Promise<Investment> {
+    const [row] = await db.update(investments).set(data).where(eq(investments.id, id)).returning();
+    return row;
+  }
+
+  async deleteInvestment(id: number): Promise<void> {
+    await db.delete(investments).where(eq(investments.id, id));
+  }
+
+  // ── Subscriptions ──────────────────────────────────────────────────────────
+
+  async getSubscriptions(): Promise<Subscription[]> {
+    return await db.select().from(subscriptions).orderBy(desc(subscriptions.createdAt));
+  }
+
+  async createSubscription(data: InsertSubscription): Promise<Subscription> {
+    const [row] = await db.insert(subscriptions).values(data).returning();
+    return row;
+  }
+
+  async updateSubscription(id: number, data: Partial<InsertSubscription>): Promise<Subscription> {
+    const [row] = await db.update(subscriptions).set(data).where(eq(subscriptions.id, id)).returning();
+    return row;
+  }
+
+  async deleteSubscription(id: number): Promise<void> {
+    await db.delete(subscriptions).where(eq(subscriptions.id, id));
   }
 }
 

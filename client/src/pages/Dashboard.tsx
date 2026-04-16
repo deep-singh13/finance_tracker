@@ -83,8 +83,11 @@ export default function Dashboard() {
       const expDate = parseISO(exp.date);
       if (isToday(expDate)) today += exp.amount;
       if (isAfter(expDate, startOfCurrentWeek) || expDate.getTime() === startOfCurrentWeek.getTime()) week += exp.amount;
-      if (isSameMonth(expDate, now)) month += exp.amount;
-      allCategories[exp.category] = (allCategories[exp.category] || 0) + exp.amount;
+      if (isSameMonth(expDate, now)) {
+        month += exp.amount;
+        // Pie chart only shows current month's breakdown
+        allCategories[exp.category] = (allCategories[exp.category] || 0) + exp.amount;
+      }
     });
 
     const insights = calculateMonthlyInsights(expenses);
@@ -189,7 +192,7 @@ export default function Dashboard() {
           <div className="space-y-6 mt-6">
             <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/50 overflow-hidden">
               <h3 className="text-[13px] uppercase tracking-widest font-semibold text-muted-foreground mb-4">
-                Category Breakdown
+                This Month — Category Breakdown
               </h3>
               <div className="h-[240px] w-full">
                 <ResponsiveContainer width="100%" height="100%">

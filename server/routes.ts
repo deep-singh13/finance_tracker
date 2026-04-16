@@ -149,6 +149,136 @@ export async function registerRoutes(
     }
   });
 
+  // ── Investments ────────────────────────────────────────────────────────────
+
+  app.get("/api/investments", async (_req, res) => {
+    res.json(await storage.getInvestments());
+  });
+
+  app.post("/api/investments", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1),
+        type: z.string().min(1),
+        amount: z.coerce.number().positive(),
+        startDate: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+        isActive: z.boolean().default(true),
+      });
+      const data = schema.parse(req.body);
+      const row = await storage.createInvestment({ ...data, amount: Math.round(data.amount * 100) });
+      res.status(201).json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/investments/:id", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1).optional(),
+        type: z.string().min(1).optional(),
+        amount: z.coerce.number().positive().optional(),
+        startDate: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+        isActive: z.boolean().optional(),
+      });
+      const data = schema.parse(req.body);
+      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
+      const row = await storage.updateInvestment(Number(req.params.id), data);
+      res.json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.delete("/api/investments/:id", async (req, res) => {
+    await storage.deleteInvestment(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // ── Subscriptions ──────────────────────────────────────────────────────────
+
+  app.get("/api/subscriptions", async (_req, res) => {
+    res.json(await storage.getSubscriptions());
+  });
+
+  app.post("/api/subscriptions", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1),
+        amount: z.coerce.number().positive(),
+        billingDay: z.coerce.number().int().min(1).max(28).default(1),
+        category: z.string().min(1),
+        isActive: z.boolean().default(true),
+      });
+      const data = schema.parse(req.body);
+      const row = await storage.createSubscription({ ...data, amount: Math.round(data.amount * 100) });
+      res.status(201).json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/subscriptions/:id", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1).optional(),
+        amount: z.coerce.number().positive().optional(),
+        billingDay: z.coerce.number().int().min(1).max(28).optional(),
+        category: z.string().min(1).optional(),
+        isActive: z.boolean().optional(),
+      });
+      const data = schema.parse(req.body);
+      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
+      const row = await storage.updateSubscription(Number(req.params.id), data);
+      res.json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.delete("/api/subscriptions/:id", async (req, res) => {
+    await storage.deleteSubscription(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // POST /api/subscriptions/process
+  // Called by the client on every app load. Creates expense entries for active
+  // subscriptions that haven't been billed yet this month.
+  app.post("/api/subscriptions/process", async (_req, res) => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const todayDay = now.getDate();
+    const allSubs = await storage.getSubscriptions();
+
+    let billed = 0;
+    for (const sub of allSubs) {
+      if (!sub.isActive) continue;
+      if (sub.lastBilledMonth === currentMonth) continue;
+      // Only bill once the billing day has arrived this month
+      if (sub.billingDay > todayDay) continue;
+
+      const expenseDate = `${currentMonth}-${String(sub.billingDay).padStart(2, "0")}`;
+      await storage.createExpense({
+        amount: sub.amount,
+        description: sub.name,
+        category: sub.category,
+        date: expenseDate,
+        source: "subscription",
+        externalId: `sub_${sub.id}_${currentMonth}`,
+      });
+      await storage.updateSubscription(sub.id, { lastBilledMonth: currentMonth });
+      billed++;
+    }
+
+    res.json({ billed });
+  });
+
   // ── Seed initial data ──────────────────────────────────────────────────────
   const existingExpenses = await storage.getExpenses();
   if (existingExpenses.length === 0) {

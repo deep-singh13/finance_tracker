@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, date, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, date, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -19,6 +19,28 @@ export const budgets = pgTable("budgets", {
   amount: integer("amount").notNull(), // Stored in cents
 });
 
+export const investments = pgTable("investments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  type: text("type").notNull(), // 'SIP' | 'Lump Sum' | 'FD' | 'PPF' | 'NPS' | 'Other'
+  amount: integer("amount").notNull(), // in paise; monthly for SIP, total for others
+  startDate: date("start_date"),
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  amount: integer("amount").notNull(), // in paise
+  billingDay: integer("billing_day").default(1).notNull(), // day of month to create expense
+  category: text("category").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  lastBilledMonth: text("last_billed_month"), // YYYY-MM; prevents double-billing
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Stores Gmail OAuth tokens and last sync metadata
 export const gmailSync = pgTable("gmail_sync", {
   id: serial("id").primaryKey(),
@@ -31,6 +53,8 @@ export const gmailSync = pgTable("gmail_sync", {
 export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true });
 export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true });
 export const insertGmailSyncSchema = createInsertSchema(gmailSync).omit({ id: true });
+export const insertInvestmentSchema = createInsertSchema(investments).omit({ id: true, createdAt: true });
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
 
 export type Expense = typeof expenses.$inferSelect;
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
@@ -38,6 +62,10 @@ export type Budget = typeof budgets.$inferSelect;
 export type InsertBudget = z.infer<typeof insertBudgetSchema>;
 export type GmailSync = typeof gmailSync.$inferSelect;
 export type InsertGmailSync = z.infer<typeof insertGmailSyncSchema>;
+export type Investment = typeof investments.$inferSelect;
+export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 
 export type CreateExpenseRequest = InsertExpense;
 export type UpdateExpenseRequest = Partial<InsertExpense>;
