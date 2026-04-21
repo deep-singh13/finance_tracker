@@ -373,6 +373,52 @@ export async function registerRoutes(
     res.json({ billed });
   });
 
+  // ── Income ────────────────────────────────────────────────────────────────
+
+  app.get("/api/income", async (_req, res) => {
+    res.json(await storage.getIncome());
+  });
+
+  app.post("/api/income", async (req, res) => {
+    try {
+      const schema = z.object({
+        amount: z.coerce.number().positive(),
+        description: z.string().min(1),
+        source: z.enum(["salary", "freelance", "investment", "other"]).default("other"),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      });
+      const data = schema.parse(req.body);
+      const row = await storage.createIncome({ ...data, amount: Math.round(data.amount * 100) });
+      res.status(201).json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/income/:id", async (req, res) => {
+    try {
+      const schema = z.object({
+        amount: z.coerce.number().positive().optional(),
+        description: z.string().min(1).optional(),
+        source: z.enum(["salary", "freelance", "investment", "other"]).optional(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      });
+      const data = schema.parse(req.body);
+      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
+      const row = await storage.updateIncome(Number(req.params.id), data);
+      res.json(row);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.delete("/api/income/:id", async (req, res) => {
+    await storage.deleteIncome(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // ── Seed initial data ──────────────────────────────────────────────────────
   const existingExpenses = await storage.getExpenses();
   if (existingExpenses.length === 0) {

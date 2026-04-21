@@ -21,6 +21,7 @@ export interface UIExpenseInput {
   description: string;
   category: string;
   date: string;
+  tags?: string[];
 }
 
 // Create expense
@@ -40,6 +41,7 @@ export function useCreateExpense() {
       const payload = {
         ...uiData,
         amount: amountInCents,
+        tags: uiData.tags ?? [],
       };
 
       const validated = api.expenses.create.input.parse(payload);

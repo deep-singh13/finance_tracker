@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, X, Tag } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,7 +25,9 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
+
   const createMutation = useCreateExpense();
   const updateMutation = useUpdateExpense();
 
@@ -35,19 +37,33 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
       setDescription(expense.description);
       setCategory(expense.category);
       setDate(expense.date);
+      setTags(expense.tags ?? []);
+      setTagInput("");
     } else if (!expense && open) {
       setAmount("");
       setDescription("");
       setCategory(CATEGORIES[0]);
       setDate(format(new Date(), "yyyy-MM-dd"));
+      setTags([]);
+      setTagInput("");
     }
   }, [expense, open]);
+
+  const addTag = () => {
+    const raw = tagInput.trim();
+    if (!raw) return;
+    const tag = raw.startsWith("#") ? raw : `#${raw}`;
+    if (!tags.includes(tag)) setTags(t => [...t, tag]);
+    setTagInput("");
+  };
+
+  const removeTag = (tag: string) => setTags(t => t.filter(x => x !== tag));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!amount || !description) return;
 
-    const uiData = { amount, description, category, date };
+    const uiData = { amount, description, category, date, tags };
 
     if (expense) {
       updateMutation.mutate(
@@ -64,6 +80,8 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
             setDescription("");
             setCategory(CATEGORIES[0]);
             setDate(format(new Date(), "yyyy-MM-dd"));
+            setTags([]);
+            setTagInput("");
           }
         }
       );
@@ -166,8 +184,44 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
             </div>
           </div>
 
-          <Button 
-            type="submit" 
+          <div>
+            <label className="block text-[13px] uppercase tracking-wider font-semibold text-muted-foreground mb-3 px-2">
+              Tags
+            </label>
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {tags.map(tag => (
+                <span key={tag} className="flex items-center gap-1 bg-primary/10 text-primary text-[12px] font-medium px-2.5 py-1 rounded-full">
+                  {tag}
+                  <button type="button" onClick={() => removeTag(tag)} className="hover:text-destructive transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="vacation, work, tax..."
+                  value={tagInput}
+                  onChange={e => setTagInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
+                  className="w-full pl-8 pr-3 py-2 bg-card border border-border/50 rounded-xl text-[14px] focus:outline-none focus:ring-1 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={addTag}
+                className="px-3 py-2 bg-card border border-border/50 rounded-xl text-[13px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+
+          <Button
+            type="submit"
             className="w-full rounded-xl py-6 text-[17px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg shadow-primary/20"
             disabled={createMutation.isPending || updateMutation.isPending || !amount || !description}
           >

@@ -9,8 +9,9 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Investments from "@/pages/Investments";
 import Subscriptions from "@/pages/Subscriptions";
+import IncomePage from "@/pages/Income";
 import { History } from "@/components/History";
-import { LayoutDashboard, History as HistoryIcon, TrendingUp, RefreshCw } from "lucide-react";
+import { LayoutDashboard, History as HistoryIcon, TrendingUp, RefreshCw, Wallet } from "lucide-react";
 
 // Runs on every app load — creates expenses for active subscriptions whose
 // billing day has passed this month and haven't been billed yet.
@@ -32,6 +33,7 @@ function TabBar() {
 
   const tabs = [
     { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
+    { href: "/income",        label: "Income",        icon: Wallet },
     { href: "/investments",   label: "Investments",   icon: TrendingUp },
     { href: "/subscriptions", label: "Subscriptions", icon: RefreshCw },
     { href: "/history",       label: "History",       icon: HistoryIcon },
@@ -58,6 +60,7 @@ function Router() {
     <div className="pb-20">
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/income" component={IncomePage} />
         <Route path="/investments" component={Investments} />
         <Route path="/subscriptions" component={Subscriptions} />
         <Route path="/history" component={History} />

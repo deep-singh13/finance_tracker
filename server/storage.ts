@@ -5,6 +5,7 @@ import {
   gmailSync,
   investments,
   subscriptions,
+  income,
   type CreateExpenseRequest,
   type UpdateExpenseRequest,
   type ExpenseResponse,
@@ -16,6 +17,8 @@ import {
   type InsertInvestment,
   type Subscription,
   type InsertSubscription,
+  type Income,
+  type InsertIncome,
 } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
@@ -40,6 +43,11 @@ export interface IStorage {
   createSubscription(data: InsertSubscription): Promise<Subscription>;
   updateSubscription(id: number, data: Partial<InsertSubscription>): Promise<Subscription>;
   deleteSubscription(id: number): Promise<void>;
+  // Income
+  getIncome(): Promise<Income[]>;
+  createIncome(data: InsertIncome): Promise<Income>;
+  updateIncome(id: number, data: Partial<InsertIncome>): Promise<Income>;
+  deleteIncome(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -151,6 +159,26 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSubscription(id: number): Promise<void> {
     await db.delete(subscriptions).where(eq(subscriptions.id, id));
+  }
+
+  // ── Income ─────────────────────────────────────────────────────────────────
+
+  async getIncome(): Promise<Income[]> {
+    return await db.select().from(income).orderBy(desc(income.date));
+  }
+
+  async createIncome(data: InsertIncome): Promise<Income> {
+    const [row] = await db.insert(income).values(data).returning();
+    return row;
+  }
+
+  async updateIncome(id: number, data: Partial<InsertIncome>): Promise<Income> {
+    const [row] = await db.update(income).set(data).where(eq(income.id, id)).returning();
+    return row;
+  }
+
+  async deleteIncome(id: number): Promise<void> {
+    await db.delete(income).where(eq(income.id, id));
   }
 }
 

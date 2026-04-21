@@ -134,9 +134,16 @@ export function History() {
                           <span className="text-[16px] font-medium text-foreground leading-snug">
                             {expense.description}
                           </span>
-                          <span className="text-[13px] text-muted-foreground mt-0.5">
-                            {format(parseISO(expense.date), "MMM d")} • {expense.category}
-                          </span>
+                          <div className="flex items-center flex-wrap gap-1.5 mt-0.5">
+                            <span className="text-[13px] text-muted-foreground">
+                              {format(parseISO(expense.date), "MMM d")} • {expense.category}
+                            </span>
+                            {expense.tags?.map(tag => (
+                              <span key={tag} className="text-[11px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
                         </div>
                         
                         <div className="flex items-center gap-3">

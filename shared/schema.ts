@@ -8,8 +8,18 @@ export const expenses = pgTable("expenses", {
   description: text("description").notNull(),
   category: text("category").notNull(),
   date: date("date").notNull(), // YYYY-MM-DD
-  source: text("source").default("manual").notNull(), // 'manual' | 'gmail'
+  source: text("source").default("manual").notNull(), // 'manual' | 'gmail' | 'subscription'
   externalId: text("external_id"), // Gmail message ID for deduplication
+  tags: text("tags").array(), // free-form tags e.g. ['#vacation', '#tax-deductible']
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const income = pgTable("income", {
+  id: serial("id").primaryKey(),
+  amount: integer("amount").notNull(), // Stored in cents
+  description: text("description").notNull(),
+  source: text("source").notNull().default("other"), // 'salary' | 'freelance' | 'investment' | 'other'
+  date: date("date").notNull(), // YYYY-MM-DD
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -50,11 +60,14 @@ export const gmailSync = pgTable("gmail_sync", {
   lastSyncedAt: timestamp("last_synced_at"), // Timestamp of last successful sync
 });
 
-export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true });
+export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true }).extend({
+  tags: z.array(z.string()).optional().nullable(),
+});
 export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true });
 export const insertGmailSyncSchema = createInsertSchema(gmailSync).omit({ id: true });
 export const insertInvestmentSchema = createInsertSchema(investments).omit({ id: true, createdAt: true });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
+export const insertIncomeSchema = createInsertSchema(income).omit({ id: true, createdAt: true });
 
 export type Expense = typeof expenses.$inferSelect;
 export type InsertExpense = z.infer<typeof insertExpenseSchema>;
@@ -66,6 +79,8 @@ export type Investment = typeof investments.$inferSelect;
 export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type Income = typeof income.$inferSelect;
+export type InsertIncome = z.infer<typeof insertIncomeSchema>;
 
 export type CreateExpenseRequest = InsertExpense;
 export type UpdateExpenseRequest = Partial<InsertExpense>;
