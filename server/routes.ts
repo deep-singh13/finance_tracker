@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import type { Server } from "http";
+import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
@@ -147,6 +148,99 @@ export async function registerRoutes(
       }
       throw err;
     }
+  });
+
+  // ── Gmail Staging Routes ───────────────────────────────────────────────────
+  // Two-phase import: skill POSTs to /stage, user reviews in the web UI,
+  // then confirms with /commit. Staging lives in memory (ephemeral).
+
+  interface StagedTransaction {
+    tempId: string;
+    amount: number;
+    description: string;
+    category: string;
+    date: string;
+    externalId: string;
+  }
+
+  let staged: StagedTransaction[] = [];
+
+  // POST /api/gmail/stage — accepts parsed transactions, filters duplicates, stores in staging
+  app.post("/api/gmail/stage", async (req, res) => {
+    const apiKey = process.env.SYNC_API_KEY;
+    if (apiKey) {
+      const provided = req.headers["x-sync-key"];
+      if (provided !== apiKey) {
+        return res.status(401).json({ message: "Invalid or missing X-Sync-Key header" });
+      }
+    }
+
+    try {
+      const { transactions } = syncPayloadSchema.parse(req.body);
+
+      const newTxs: StagedTransaction[] = [];
+      for (const tx of transactions) {
+        const exists = await storage.expenseExistsByExternalId(tx.externalId);
+        if (!exists) {
+          newTxs.push({ tempId: randomUUID(), ...tx });
+        }
+      }
+
+      staged = newTxs;
+      return res.json({ staged: newTxs.length, total: transactions.length });
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
+  // GET /api/gmail/staged — returns current staged transactions for review
+  app.get("/api/gmail/staged", (_req, res) => {
+    res.json(staged);
+  });
+
+  // PUT /api/gmail/staged/:tempId — edit a staged transaction before committing
+  app.put("/api/gmail/staged/:tempId", (req, res) => {
+    const idx = staged.findIndex(t => t.tempId === req.params.tempId);
+    if (idx === -1) return res.status(404).json({ message: "Not found" });
+    const { amount, description, category, date } = req.body;
+    if (amount !== undefined) staged[idx].amount = amount;
+    if (description !== undefined) staged[idx].description = description;
+    if (category !== undefined) staged[idx].category = category;
+    if (date !== undefined) staged[idx].date = date;
+    res.json(staged[idx]);
+  });
+
+  // DELETE /api/gmail/staged/:tempId — remove a staged transaction
+  app.delete("/api/gmail/staged/:tempId", (req, res) => {
+    const idx = staged.findIndex(t => t.tempId === req.params.tempId);
+    if (idx === -1) return res.status(404).json({ message: "Not found" });
+    staged.splice(idx, 1);
+    res.status(204).send();
+  });
+
+  // POST /api/gmail/commit — save all staged transactions to DB and clear staging
+  app.post("/api/gmail/commit", async (_req, res) => {
+    let imported = 0;
+    for (const tx of staged) {
+      const exists = await storage.expenseExistsByExternalId(tx.externalId);
+      if (!exists) {
+        await storage.createExpense({
+          amount: tx.amount,
+          description: tx.description,
+          category: tx.category,
+          date: tx.date,
+          source: "gmail",
+          externalId: tx.externalId,
+        });
+        imported++;
+      }
+    }
+    staged = [];
+    await storage.upsertGmailSync({ lastSyncedAt: new Date() });
+    res.json({ imported });
   });
 
   // ── Investments ────────────────────────────────────────────────────────────

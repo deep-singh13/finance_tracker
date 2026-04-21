@@ -1,6 +1,6 @@
 # sync-gmail
 
-Fetch HDFC Bank transaction emails from Gmail and import them into the finance tracker.
+Fetch HDFC Bank transaction emails from Gmail and push them to the finance tracker's staging area for review.
 
 ## Steps
 
@@ -40,15 +40,13 @@ For every message, extract from its **snippet** (no need to call `get_thread`):
 
 Capitalise the merchant name in title case (e.g. `ZOMATO` → `Zomato`, `COSMO PROFILE SALONS` → `Cosmo Profile Salons`).
 
-**Category** — infer from the merchant name using these keywords (case-insensitive):
-- Food: swiggy, zomato, blinkit, mcdonald, pizza, domino, restaurant, cafe, food, biryani
-- Shopping: amazon, flipkart, myntra, nykaa, ajio, shop, mart
-- Transport: ola, uber, rapido, metro, auto, taxi, petrol, fuel, parking
-- Entertainment: netflix, hotstar, spotify, bookmyshow, prime, movie, apple (if "Apple Services")
-- Utilities: jio, airtel, bsnl, internet, broadband, electricity, gas, recharge, dth
-- Health: hospital, clinic, doctor, pharmacy, medical, apollo, medplus
-- Travel: hotel, flight, irctc, makemytrip, goibibo, oyo
-- Other: anything that doesn't match above
+**Category** — map to one of exactly these 4 values (case-sensitive): `Food`, `Entertainment`, `Amenities`, `Miscellaneous`
+
+Use these keyword rules (case-insensitive on the merchant name):
+- **Food**: swiggy, zomato, blinkit, mcdonald, pizza, domino, restaurant, cafe, food, biryani, burger, kfc, starbucks
+- **Entertainment**: netflix, hotstar, spotify, bookmyshow, prime video, apple services, youtube, disney, movie, game
+- **Amenities**: jio, airtel, bsnl, internet, broadband, electricity, gas, recharge, dth, water, bill, hospital, clinic, doctor, pharmacy, medical, apollo, medplus, gym, salon, ola, uber, rapido, metro, petrol, fuel, parking
+- **Miscellaneous**: everything else (amazon, flipkart, shopping, hotel, flight, irctc, etc.)
 
 **Date** — use the message's `date` field (ISO 8601), convert to `YYYY-MM-DD`.
 
@@ -59,12 +57,12 @@ Capitalise the merchant name in title case (e.g. `ZOMATO` → `Zomato`, `COSMO P
 - The snippet contains `credited` but NOT `debited` (refunds/incoming, skip these)
 - Subject contains `OTP` (one-time password emails, not transactions)
 
-### 5 — POST to the API
+### 5 — POST to the staging API
 
-Batch all parsed transactions in a single request:
+Batch all parsed transactions in a single request to the **staging** endpoint (not sync):
 
 ```
-POST $FINANCE_TRACKER_URL/api/gmail/sync
+POST $FINANCE_TRACKER_URL/api/gmail/stage
 Content-Type: application/json
 X-Sync-Key: $SYNC_API_KEY   ← only if SYNC_API_KEY is set
 
@@ -76,15 +74,18 @@ X-Sync-Key: $SYNC_API_KEY   ← only if SYNC_API_KEY is set
 }
 ```
 
+The server will automatically filter out transactions already in the database.
+
 ### 6 — Report results
 
 Print a summary like:
 ```
-✅ Gmail sync complete
+✅ Gmail sync staged for review
    Fetched : 42 emails
-   Imported: 38 new transactions
-   Skipped : 4 (already in DB)
-   Last synced: 2026-04-17 14:30
+   Staged  : 12 new transactions (ready to review in the app)
+   Skipped : 30 (already in DB or duplicates)
+
+Open the finance tracker and click "Sync Gmail" to review and approve.
 ```
 
 If the request fails, show the error message from the response body.
