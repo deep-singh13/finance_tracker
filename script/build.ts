@@ -8,6 +8,7 @@ const allowlist = [
   "@google/generative-ai",
   "googleapis",
   "bcrypt",
+  "express-rate-limit",
   "axios",
   "connect-pg-simple",
   "cors",
