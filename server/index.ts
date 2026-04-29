@@ -14,6 +14,11 @@ declare module "http" {
   }
 }
 
+// Trust Render's reverse proxy so req.secure = true (HTTPS is terminated at
+// the proxy before reaching Express). Without this, express-session sees an
+// HTTP connection and refuses to send the Secure cookie → 401 on every request.
+app.set("trust proxy", 1);
+
 // ── Session store ─────────────────────────────────────────────────────────────
 // memorystore: LRU memory store with automatic pruning of expired sessions.
 // Sessions are lost on server restart (deploy), which is fine for a single-user
