@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
-import { OTPInput, OTPInputContext } from "input-otp";
-import { useContext } from "react";
+import { OTPInput, type SlotProps } from "input-otp";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
-// Single slot rendered by OTPInput
-function Slot({ index }: { index: number }) {
-  const ctx = useContext(OTPInputContext);
-  const slot = ctx.slots[index];
-
+// Single slot — receives slot data directly as props (not from context)
+// input-otp's render prop does NOT wrap output in a context Provider,
+// so useContext(OTPInputContext) would return the default empty object.
+// Pass slot data via spread instead: {slots.map((slot, i) => <Slot key={i} {...slot} />)}
+function Slot(props: SlotProps) {
   return (
     <div
       className={cn(
@@ -16,15 +15,15 @@ function Slot({ index }: { index: number }) {
         "flex items-center justify-center",
         "rounded-2xl border-2 transition-all duration-150",
         "bg-card text-foreground",
-        slot.isActive
+        props.isActive
           ? "border-primary shadow-[0_0_0_3px] shadow-primary/20"
           : "border-border/60",
       )}
     >
-      {slot.char ?? (
+      {props.char ?? (
         <span className="w-2 h-2 rounded-full bg-muted-foreground/30" />
       )}
-      {slot.hasFakeCaret && (
+      {props.hasFakeCaret && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-0.5 h-6 bg-primary animate-[caret-blink_1s_step-end_infinite]" />
         </div>
@@ -121,8 +120,8 @@ export default function Login({ onSuccess }: LoginProps) {
             containerClassName="flex gap-3"
             render={({ slots }) => (
               <>
-                {slots.map((_, i) => (
-                  <Slot key={i} index={i} />
+                {slots.map((slot, i) => (
+                  <Slot key={i} {...slot} />
                 ))}
               </>
             )}
