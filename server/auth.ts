@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import type { Request, Response, NextFunction } from "express";
 
