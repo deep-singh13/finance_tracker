@@ -86,8 +86,11 @@ function AuthGuard() {
   const { refetch } = useAuth();
 
   if (isLoading) {
-    // Blank screen — avoids flash of login page for already-authenticated users
-    return <div className="min-h-screen bg-background" />;
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    );
   }
 
   if (!authenticated) {

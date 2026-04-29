@@ -6,8 +6,19 @@ export function useAuth() {
   const { data, isLoading } = useQuery({
     queryKey: AUTH_KEY,
     queryFn: async () => {
-      const res = await fetch("/api/auth/me", { credentials: "include" });
-      return res.ok;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000); // 5 s timeout
+      try {
+        const res = await fetch("/api/auth/me", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        return res.ok;
+      } catch {
+        return false; // network error / timeout → show login
+      } finally {
+        clearTimeout(timeout);
+      }
     },
     retry: false,
     staleTime: 5 * 60 * 1000, // re-check every 5 min
