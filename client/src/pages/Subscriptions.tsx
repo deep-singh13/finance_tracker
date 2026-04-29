@@ -128,7 +128,11 @@ function SubscriptionModal({
 export default function Subscriptions() {
   const { data: subs = [], isLoading } = useQuery<Subscription[]>({
     queryKey: ["/api/subscriptions"],
-    queryFn: async () => (await fetch("/api/subscriptions")).json(),
+    queryFn: async () => {
+      const res = await fetch("/api/subscriptions", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
   });
   const qc = useQueryClient();
   const { toast } = useToast();

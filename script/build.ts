@@ -10,7 +10,6 @@ const allowlist = [
   "bcryptjs",
   "express-rate-limit",
   "axios",
-  "connect-pg-simple",
   "cors",
   "date-fns",
   "drizzle-orm",

@@ -1,4 +1,4 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, QueryFunction, QueryCache } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -42,6 +42,17 @@ export const getQueryFn: <T>(options: {
   };
 
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    // If any query gets a 401, the session has expired — force back to login.
+    // useAuth's queryFn catches errors and returns false (no throw), so it
+    // won't trigger this handler; only protected-route queries will.
+    onError: (error) => {
+      if (error.message.startsWith("401:")) {
+        queryClient.setQueryData(["/api/auth/me"], false);
+        queryClient.clear();
+      }
+    },
+  }),
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),

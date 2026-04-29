@@ -72,7 +72,8 @@ export default function Dashboard() {
   const { data: subscriptions } = useQuery<Subscription[]>({
     queryKey: ["/api/subscriptions"],
     queryFn: async () => {
-      const res = await fetch("/api/subscriptions");
+      const res = await fetch("/api/subscriptions", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
       return res.json();
     },
   });

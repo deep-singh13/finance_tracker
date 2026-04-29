@@ -83,7 +83,6 @@ function Router() {
 // Shows a blank screen while checking auth, then Login or the app
 function AuthGuard() {
   const { authenticated, isLoading } = useAuth();
-  const { refetch } = useAuth();
 
   if (isLoading) {
     return (

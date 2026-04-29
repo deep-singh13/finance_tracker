@@ -131,7 +131,11 @@ function InvestmentModal({
 export default function Investments() {
   const { data: investments = [], isLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
-    queryFn: async () => (await fetch("/api/investments")).json(),
+    queryFn: async () => {
+      const res = await fetch("/api/investments", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
   });
   const qc = useQueryClient();
   const { toast } = useToast();

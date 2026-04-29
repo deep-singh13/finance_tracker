@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import type { Server } from "http";
 import { randomUUID } from "crypto";
 import { storage } from "./storage";
@@ -18,6 +18,28 @@ const syncPayloadSchema = z.object({
   transactions: z.array(parsedTransactionSchema),
 });
 
+// Staging store lives in memory (ephemeral — survives only while the server is up)
+interface StagedTransaction {
+  tempId: string;
+  amount: number;
+  description: string;
+  category: string;
+  date: string;
+  externalId: string;
+}
+let staged: StagedTransaction[] = [];
+
+// Helper: check X-Sync-Key header against SYNC_API_KEY env var.
+// Returns true if the request is allowed, false (and sends 401) if not.
+function checkSyncKey(req: Request, res: Response): boolean {
+  const apiKey = process.env.SYNC_API_KEY;
+  if (apiKey && req.headers["x-sync-key"] !== apiKey) {
+    res.status(401).json({ message: "Invalid or missing X-Sync-Key header" });
+    return false;
+  }
+  return true;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -28,112 +50,22 @@ export async function registerRoutes(
   app.post("/api/auth/logout", handleLogout);
   app.get("/api/auth/me", handleMe);
 
-  // ── Protect all remaining /api/* routes ───────────────────────────────────
-  app.use("/api", requireAuth);
+  // ── Gmail sync routes (public — protected by X-Sync-Key, not session) ──────
+  // Called by the /sync-gmail Claude Code skill which has no browser session.
+  // SYNC_API_KEY env var is optional; if set, the skill must send it as
+  // X-Sync-Key header. These are intentionally outside the requireAuth wall.
 
-  app.get(api.expenses.list.path, async (req, res) => {
-    const expenses = await storage.getExpenses();
-    res.json(expenses);
-  });
-
-  app.get(api.expenses.get.path, async (req, res) => {
-    const expense = await storage.getExpense(Number(req.params.id));
-    if (!expense) {
-      return res.status(404).json({ message: 'Expense not found' });
-    }
-    res.json(expense);
-  });
-
-  app.post(api.expenses.create.path, async (req, res) => {
-    try {
-      const input = api.expenses.create.input.parse(req.body);
-      const expense = await storage.createExpense(input);
-      res.status(201).json(expense);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
-        });
-      }
-      throw err;
-    }
-  });
-
-  app.put(api.expenses.update.path, async (req, res) => {
-    try {
-      const input = api.expenses.update.input.parse(req.body);
-      const expense = await storage.updateExpense(Number(req.params.id), input);
-      if (!expense) {
-         return res.status(404).json({ message: 'Expense not found' });
-      }
-      res.json(expense);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
-        });
-      }
-      throw err;
-    }
-  });
-
-  app.delete(api.expenses.delete.path, async (req, res) => {
-    await storage.deleteExpense(Number(req.params.id));
-    res.status(204).send();
-  });
-
-  app.get(api.budgets.get.path, async (req, res) => {
-    const budget = await storage.getBudget(req.params.month);
-    if (!budget) {
-      return res.status(404).json({ message: 'Budget not found' });
-    }
-    res.json(budget);
-  });
-
-  app.post(api.budgets.set.path, async (req, res) => {
-    try {
-      const input = api.budgets.set.input.parse(req.body);
-      const budget = await storage.setBudget(input);
-      res.json(budget);
-    } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({
-          message: err.errors[0].message,
-          field: err.errors[0].path.join('.'),
-        });
-      }
-      throw err;
-    }
-  });
-
-  // ── Gmail Sync Routes ──────────────────────────────────────────────────────
-  // Transactions are pushed HERE by the /sync-gmail Claude Code skill.
-  // The skill uses the Gmail MCP connector (available in Claude Code) to read
-  // emails and parse transactions, then POSTs them to this endpoint.
-  // No Google Cloud account required.
-
-  // GET /api/gmail/status — returns last sync timestamp
+  // GET /api/gmail/status — returns last sync timestamp (used by skill + dashboard)
   app.get("/api/gmail/status", async (_req, res) => {
     const record = await storage.getGmailSync();
     res.json({ lastSyncedAt: record?.lastSyncedAt ?? null });
   });
 
-  // POST /api/gmail/sync — accepts parsed transactions from the Claude Code skill
-  // Optionally protected by SYNC_API_KEY env var (set same key in your skill env)
+  // POST /api/gmail/sync — direct import (skill pushes, no review step)
   app.post("/api/gmail/sync", async (req, res) => {
-    const apiKey = process.env.SYNC_API_KEY;
-    if (apiKey) {
-      const provided = req.headers["x-sync-key"];
-      if (provided !== apiKey) {
-        return res.status(401).json({ message: "Invalid or missing X-Sync-Key header" });
-      }
-    }
-
+    if (!checkSyncKey(req, res)) return;
     try {
       const { transactions } = syncPayloadSchema.parse(req.body);
-
       let imported = 0;
       for (const tx of transactions) {
         const exists = await storage.expenseExistsByExternalId(tx.externalId);
@@ -148,64 +80,93 @@ export async function registerRoutes(
         });
         imported++;
       }
-
       await storage.upsertGmailSync({ lastSyncedAt: new Date() });
       return res.json({ imported, total: transactions.length, lastSyncedAt: new Date() });
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
     }
   });
 
-  // ── Gmail Staging Routes ───────────────────────────────────────────────────
-  // Two-phase import: skill POSTs to /stage, user reviews in the web UI,
-  // then confirms with /commit. Staging lives in memory (ephemeral).
-
-  interface StagedTransaction {
-    tempId: string;
-    amount: number;
-    description: string;
-    category: string;
-    date: string;
-    externalId: string;
-  }
-
-  let staged: StagedTransaction[] = [];
-
-  // POST /api/gmail/stage — accepts parsed transactions, filters duplicates, stores in staging
+  // POST /api/gmail/stage — two-phase import: skill stages, user reviews, then commits
   app.post("/api/gmail/stage", async (req, res) => {
-    const apiKey = process.env.SYNC_API_KEY;
-    if (apiKey) {
-      const provided = req.headers["x-sync-key"];
-      if (provided !== apiKey) {
-        return res.status(401).json({ message: "Invalid or missing X-Sync-Key header" });
-      }
-    }
-
+    if (!checkSyncKey(req, res)) return;
     try {
       const { transactions } = syncPayloadSchema.parse(req.body);
-
       const newTxs: StagedTransaction[] = [];
       for (const tx of transactions) {
         const exists = await storage.expenseExistsByExternalId(tx.externalId);
-        if (!exists) {
-          newTxs.push({ tempId: randomUUID(), ...tx });
-        }
+        if (!exists) newTxs.push({ tempId: randomUUID(), ...tx });
       }
-
       staged = newTxs;
       return res.json({ staged: newTxs.length, total: transactions.length });
     } catch (err) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: err.errors[0].message });
-      }
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
     }
   });
 
-  // GET /api/gmail/staged — returns current staged transactions for review
+  // ── All remaining /api/* routes require a valid browser session ─────────────
+  app.use("/api", requireAuth);
+
+  // ── Expenses ────────────────────────────────────────────────────────────────
+  app.get(api.expenses.list.path, async (_req, res) => {
+    res.json(await storage.getExpenses());
+  });
+
+  app.get(api.expenses.get.path, async (req, res) => {
+    const expense = await storage.getExpense(Number(req.params.id));
+    if (!expense) return res.status(404).json({ message: "Expense not found" });
+    res.json(expense);
+  });
+
+  app.post(api.expenses.create.path, async (req, res) => {
+    try {
+      const input = api.expenses.create.input.parse(req.body);
+      const expense = await storage.createExpense(input);
+      res.status(201).json(expense);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join(".") });
+      throw err;
+    }
+  });
+
+  app.put(api.expenses.update.path, async (req, res) => {
+    try {
+      const input = api.expenses.update.input.parse(req.body);
+      const expense = await storage.updateExpense(Number(req.params.id), input);
+      if (!expense) return res.status(404).json({ message: "Expense not found" });
+      res.json(expense);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join(".") });
+      throw err;
+    }
+  });
+
+  app.delete(api.expenses.delete.path, async (req, res) => {
+    await storage.deleteExpense(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // ── Budgets ─────────────────────────────────────────────────────────────────
+  app.get(api.budgets.get.path, async (req, res) => {
+    const budget = await storage.getBudget(req.params.month);
+    if (!budget) return res.status(404).json({ message: "Budget not found" });
+    res.json(budget);
+  });
+
+  app.post(api.budgets.set.path, async (req, res) => {
+    try {
+      const input = api.budgets.set.input.parse(req.body);
+      res.json(await storage.setBudget(input));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message, field: err.errors[0].path.join(".") });
+      throw err;
+    }
+  });
+
+  // ── Gmail staging review (browser only — session protected) ─────────────────
+  // GET /api/gmail/staged — list staged transactions for review in the UI
   app.get("/api/gmail/staged", (_req, res) => {
     res.json(staged);
   });
@@ -222,7 +183,7 @@ export async function registerRoutes(
     res.json(staged[idx]);
   });
 
-  // DELETE /api/gmail/staged/:tempId — remove a staged transaction
+  // DELETE /api/gmail/staged/:tempId — discard a staged transaction
   app.delete("/api/gmail/staged/:tempId", (req, res) => {
     const idx = staged.findIndex(t => t.tempId === req.params.tempId);
     if (idx === -1) return res.status(404).json({ message: "Not found" });
@@ -252,8 +213,7 @@ export async function registerRoutes(
     res.json({ imported });
   });
 
-  // ── Investments ────────────────────────────────────────────────────────────
-
+  // ── Investments ─────────────────────────────────────────────────────────────
   app.get("/api/investments", async (_req, res) => {
     res.json(await storage.getInvestments());
   });
@@ -269,8 +229,7 @@ export async function registerRoutes(
         isActive: z.boolean().default(true),
       });
       const data = schema.parse(req.body);
-      const row = await storage.createInvestment({ ...data, amount: Math.round(data.amount * 100) });
-      res.status(201).json(row);
+      res.status(201).json(await storage.createInvestment({ ...data, amount: Math.round(data.amount * 100) }));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -289,8 +248,7 @@ export async function registerRoutes(
       });
       const data = schema.parse(req.body);
       if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
-      const row = await storage.updateInvestment(Number(req.params.id), data);
-      res.json(row);
+      res.json(await storage.updateInvestment(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -302,8 +260,7 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  // ── Subscriptions ──────────────────────────────────────────────────────────
-
+  // ── Subscriptions ───────────────────────────────────────────────────────────
   app.get("/api/subscriptions", async (_req, res) => {
     res.json(await storage.getSubscriptions());
   });
@@ -318,8 +275,7 @@ export async function registerRoutes(
         isActive: z.boolean().default(true),
       });
       const data = schema.parse(req.body);
-      const row = await storage.createSubscription({ ...data, amount: Math.round(data.amount * 100) });
-      res.status(201).json(row);
+      res.status(201).json(await storage.createSubscription({ ...data, amount: Math.round(data.amount * 100) }));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -337,8 +293,7 @@ export async function registerRoutes(
       });
       const data = schema.parse(req.body);
       if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
-      const row = await storage.updateSubscription(Number(req.params.id), data);
-      res.json(row);
+      res.json(await storage.updateSubscription(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -350,9 +305,8 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  // POST /api/subscriptions/process
-  // Called by the client on every app load. Creates expense entries for active
-  // subscriptions that haven't been billed yet this month.
+  // POST /api/subscriptions/process — auto-bill active subs whose billing day has passed
+  // Called silently by the client on every app load.
   app.post("/api/subscriptions/process", async (_req, res) => {
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -363,7 +317,6 @@ export async function registerRoutes(
     for (const sub of allSubs) {
       if (!sub.isActive) continue;
       if (sub.lastBilledMonth === currentMonth) continue;
-      // Only bill once the billing day has arrived this month
       if (sub.billingDay > todayDay) continue;
 
       const expenseDate = `${currentMonth}-${String(sub.billingDay).padStart(2, "0")}`;
@@ -382,8 +335,7 @@ export async function registerRoutes(
     res.json({ billed });
   });
 
-  // ── Income ────────────────────────────────────────────────────────────────
-
+  // ── Income ──────────────────────────────────────────────────────────────────
   app.get("/api/income", async (_req, res) => {
     res.json(await storage.getIncome());
   });
@@ -397,8 +349,7 @@ export async function registerRoutes(
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       });
       const data = schema.parse(req.body);
-      const row = await storage.createIncome({ ...data, amount: Math.round(data.amount * 100) });
-      res.status(201).json(row);
+      res.status(201).json(await storage.createIncome({ ...data, amount: Math.round(data.amount * 100) }));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -415,8 +366,7 @@ export async function registerRoutes(
       });
       const data = schema.parse(req.body);
       if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
-      const row = await storage.updateIncome(Number(req.params.id), data);
-      res.json(row);
+      res.json(await storage.updateIncome(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -428,10 +378,10 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
-  // ── Seed initial data ──────────────────────────────────────────────────────
+  // ── Seed initial data ────────────────────────────────────────────────────────
   const existingExpenses = await storage.getExpenses();
   if (existingExpenses.length === 0) {
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     await storage.createExpense({ amount: 1250, description: "Lunch at cafe", category: "Food", date: today });
     await storage.createExpense({ amount: 5500, description: "Movie tickets", category: "Entertainment", date: today });
     await storage.createExpense({ amount: 15000, description: "Electric bill", category: "Amenities", date: today });

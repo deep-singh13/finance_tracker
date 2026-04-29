@@ -1,7 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
-import connectPgSimple from "connect-pg-simple";
-import { pool } from "./db";
+import MemoryStore from "memorystore";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -16,27 +15,27 @@ declare module "http" {
 }
 
 // ── Session store ─────────────────────────────────────────────────────────────
-// Persists sessions in Neon (Postgres) so they survive Render restarts/cold starts.
-const PgSession = connectPgSimple(session);
-
+// memorystore: LRU memory store with automatic pruning of expired sessions.
+// Sessions are lost on server restart (deploy), which is fine for a single-user
+// personal app. Avoids connect-pg-simple's file-system dependency (table.sql)
+// that breaks when bundled with esbuild.
+const SessionStore = MemoryStore(session);
 const isProduction = process.env.NODE_ENV === "production";
 
 app.use(
   session({
-    store: new PgSession({
-      pool,
-      tableName: "sessions",     // auto-created on first run
-      createTableIfMissing: true,
+    store: new SessionStore({
+      checkPeriod: 24 * 60 * 60 * 1000, // prune expired entries every 24h
     }),
-    name: "sid",                 // don't use the default "connect.sid" name
+    name: "sid",
     secret: process.env.SESSION_SECRET || "dev-secret-change-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
-      httpOnly: true,            // JS cannot read this cookie
+      httpOnly: true,
       secure: isProduction,      // HTTPS-only in production (Render provides HTTPS)
-      sameSite: "strict",        // blocks CSRF entirely for same-origin apps
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days, rolling
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })
 );
