@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { requireAuth, handleLogin, handleLogout, handleMe, loginRateLimiter } from "./auth";
 
 const parsedTransactionSchema = z.object({
   amount: z.number().positive(),       // in paise
@@ -21,6 +22,14 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // ── Auth routes (public — no requireAuth) ──────────────────────────────────
+  app.post("/api/auth/login", loginRateLimiter, handleLogin);
+  app.post("/api/auth/logout", handleLogout);
+  app.get("/api/auth/me", handleMe);
+
+  // ── Protect all remaining /api/* routes ───────────────────────────────────
+  app.use("/api", requireAuth);
 
   app.get(api.expenses.list.path, async (req, res) => {
     const expenses = await storage.getExpenses();
