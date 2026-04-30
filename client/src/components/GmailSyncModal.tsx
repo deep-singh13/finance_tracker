@@ -1,10 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { X, Mail, Loader2, CheckCircle, Trash2, Pencil } from "lucide-react";
+import { X, Mail, Loader2, CheckCircle, Trash2, Pencil, TrendingDown, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
 import { CategoryIcon, CATEGORIES } from "./CategoryIcon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+
+const INCOME_SOURCES = [
+  { value: "salary",     label: "Salary" },
+  { value: "freelance",  label: "Freelance" },
+  { value: "investment", label: "Investment" },
+  { value: "other",      label: "Other" },
+] as const;
 
 interface StagedTx {
   tempId: string;
@@ -13,6 +20,8 @@ interface StagedTx {
   category: string;
   date: string;
   externalId: string;
+  type: "debit" | "credit";
+  incomeSource: "salary" | "freelance" | "investment" | "other";
 }
 
 type ModalState = "waiting" | "reviewing" | "committing" | "done";
@@ -74,6 +83,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
       description: tx.description,
       category: tx.category,
       date: tx.date,
+      incomeSource: tx.incomeSource,
     });
   };
 
@@ -103,7 +113,9 @@ export function GmailSyncModal({ open, onClose }: Props) {
       const res = await fetch("/api/gmail/commit", { method: "POST" });
       if (!res.ok) throw new Error("Commit failed");
       setState("done");
+      // Invalidate both expenses and income
       queryClient.invalidateQueries({ queryKey: ["/api/expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/income"] });
       setTimeout(onClose, 1800);
     } catch {
       setErrorMsg("Failed to import. Please try again.");
@@ -115,6 +127,9 @@ export function GmailSyncModal({ open, onClose }: Props) {
 
   const fmt = (paise: number) =>
     `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  const debits  = transactions.filter(t => t.type !== "credit");
+  const credits = transactions.filter(t => t.type === "credit");
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -131,13 +146,18 @@ export function GmailSyncModal({ open, onClose }: Props) {
             </div>
             <div>
               <h2 className="text-[17px] font-semibold text-foreground leading-tight">
-                {state === "waiting" && "Waiting for Gmail Sync"}
-                {state === "reviewing" && `Review ${transactions.length} Transaction${transactions.length !== 1 ? "s" : ""}`}
+                {state === "waiting"    && "Waiting for Gmail Sync"}
+                {state === "reviewing"  && `Review ${transactions.length} Transaction${transactions.length !== 1 ? "s" : ""}`}
                 {state === "committing" && "Importing..."}
-                {state === "done" && "Import Complete"}
+                {state === "done"       && "Import Complete"}
               </h2>
               {state === "reviewing" && (
-                <p className="text-[12px] text-muted-foreground mt-0.5">Edit or remove before importing</p>
+                <p className="text-[12px] text-muted-foreground mt-0.5">
+                  {debits.length > 0 && `${debits.length} expense${debits.length !== 1 ? "s" : ""}`}
+                  {debits.length > 0 && credits.length > 0 && " · "}
+                  {credits.length > 0 && `${credits.length} credit${credits.length !== 1 ? "s" : ""}`}
+                  {" — edit or remove before importing"}
+                </p>
               )}
             </div>
           </div>
@@ -191,107 +211,62 @@ export function GmailSyncModal({ open, onClose }: Props) {
                   <p className="text-[13px] text-muted-foreground mt-1">Click Cancel or close to exit.</p>
                 </div>
               ) : (
-                <div className="divide-y divide-border/40">
-                  {transactions.map((tx) => (
-                    <div key={tx.tempId} className="px-5 py-3.5">
-                      {editingId === tx.tempId ? (
-                        <div className="space-y-3">
-                          {/* Amount */}
-                          <div className="flex items-center gap-3">
-                            <span className="text-[12px] text-muted-foreground w-24 shrink-0">Amount (₹)</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={((editForm.amount ?? tx.amount) / 100).toFixed(2)}
-                              onChange={e => setEditForm(f => ({ ...f, amount: Math.round(parseFloat(e.target.value) * 100) }))}
-                              className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                          </div>
-                          {/* Description */}
-                          <div className="flex items-center gap-3">
-                            <span className="text-[12px] text-muted-foreground w-24 shrink-0">Description</span>
-                            <input
-                              type="text"
-                              value={editForm.description ?? tx.description}
-                              onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                              className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                          </div>
-                          {/* Date */}
-                          <div className="flex items-center gap-3">
-                            <span className="text-[12px] text-muted-foreground w-24 shrink-0">Date</span>
-                            <input
-                              type="date"
-                              value={editForm.date ?? tx.date}
-                              onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
-                              className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
-                          </div>
-                          {/* Category */}
-                          <div className="flex items-start gap-3">
-                            <span className="text-[12px] text-muted-foreground w-24 shrink-0 pt-1.5">Category</span>
-                            <div className="flex flex-wrap gap-1.5">
-                              {CATEGORIES.map(cat => (
-                                <button
-                                  key={cat}
-                                  type="button"
-                                  onClick={() => setEditForm(f => ({ ...f, category: cat }))}
-                                  className={cn(
-                                    "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
-                                    (editForm.category ?? tx.category) === cat
-                                      ? "bg-primary text-primary-foreground"
-                                      : "bg-muted text-muted-foreground hover:bg-muted/70"
-                                  )}
-                                >
-                                  {cat}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          {/* Actions */}
-                          <div className="flex gap-2 pt-1">
-                            <button
-                              onClick={cancelEdit}
-                              className="flex-1 py-2 rounded-xl bg-muted text-[13px] font-medium text-muted-foreground hover:bg-muted/70 transition-colors"
-                            >
-                              Cancel
-                            </button>
-                            <button
-                              onClick={() => saveEdit(tx.tempId)}
-                              className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold transition-colors"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <CategoryIcon category={tx.category} size="sm" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[14px] font-medium text-foreground truncate">{tx.description}</p>
-                            <p className="text-[12px] text-muted-foreground mt-0.5">
-                              {format(new Date(tx.date + "T00:00:00"), "dd MMM yyyy")} · {tx.category}
-                            </p>
-                          </div>
-                          <span className="text-[14px] font-semibold text-foreground shrink-0">{fmt(tx.amount)}</span>
-                          <div className="flex items-center gap-0.5 shrink-0 ml-1">
-                            <button
-                              onClick={() => startEdit(tx)}
-                              className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-muted transition-colors"
-                            >
-                              <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(tx.tempId)}
-                              className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-destructive/10 transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                <div>
+                  {/* Expenses section */}
+                  {debits.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 px-5 py-2 bg-muted/30 border-b border-border/30">
+                        <TrendingDown className="w-3.5 h-3.5 text-destructive" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Expenses ({debits.length})
+                        </span>
+                      </div>
+                      <div className="divide-y divide-border/40">
+                        {debits.map(tx => (
+                          <TxRow
+                            key={tx.tempId}
+                            tx={tx}
+                            editingId={editingId}
+                            editForm={editForm}
+                            setEditForm={setEditForm}
+                            startEdit={startEdit}
+                            cancelEdit={cancelEdit}
+                            saveEdit={saveEdit}
+                            handleDelete={handleDelete}
+                            fmt={fmt}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Credits section */}
+                  {credits.length > 0 && (
+                    <>
+                      <div className="flex items-center gap-2 px-5 py-2 bg-muted/30 border-b border-border/30">
+                        <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                          Income / Credits ({credits.length})
+                        </span>
+                      </div>
+                      <div className="divide-y divide-border/40">
+                        {credits.map(tx => (
+                          <TxRow
+                            key={tx.tempId}
+                            tx={tx}
+                            editingId={editingId}
+                            editForm={editForm}
+                            setEditForm={setEditForm}
+                            startEdit={startEdit}
+                            cancelEdit={cancelEdit}
+                            saveEdit={saveEdit}
+                            handleDelete={handleDelete}
+                            fmt={fmt}
+                          />
+                        ))}
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -313,7 +288,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
               </div>
               <div className="text-center">
                 <p className="text-[16px] font-semibold text-foreground">Transactions imported!</p>
-                <p className="text-[13px] text-muted-foreground mt-1">Your expense list has been updated.</p>
+                <p className="text-[13px] text-muted-foreground mt-1">Your expense and income lists have been updated.</p>
               </div>
             </div>
           )}
@@ -341,6 +316,157 @@ export function GmailSyncModal({ open, onClose }: Props) {
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Extracted row component ────────────────────────────────────────────────────
+interface TxRowProps {
+  tx: StagedTx;
+  editingId: string | null;
+  editForm: Partial<StagedTx>;
+  setEditForm: React.Dispatch<React.SetStateAction<Partial<StagedTx>>>;
+  startEdit: (tx: StagedTx) => void;
+  cancelEdit: () => void;
+  saveEdit: (id: string) => void;
+  handleDelete: (id: string) => void;
+  fmt: (n: number) => string;
+}
+
+function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, saveEdit, handleDelete, fmt }: TxRowProps) {
+  const isCredit = tx.type === "credit";
+
+  if (editingId === tx.tempId) {
+    return (
+      <div className="px-5 py-3.5 space-y-3">
+        {/* Amount */}
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] text-muted-foreground w-24 shrink-0">Amount (₹)</span>
+          <input
+            type="number" step="0.01"
+            value={((editForm.amount ?? tx.amount) / 100).toFixed(2)}
+            onChange={e => setEditForm(f => ({ ...f, amount: Math.round(parseFloat(e.target.value) * 100) }))}
+            className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+        {/* Description */}
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] text-muted-foreground w-24 shrink-0">Description</span>
+          <input
+            type="text"
+            value={editForm.description ?? tx.description}
+            onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+            className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+        {/* Date */}
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] text-muted-foreground w-24 shrink-0">Date</span>
+          <input
+            type="date"
+            value={editForm.date ?? tx.date}
+            onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+            className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+
+        {/* Category (debits) or Income Source (credits) */}
+        {isCredit ? (
+          <div className="flex items-start gap-3">
+            <span className="text-[12px] text-muted-foreground w-24 shrink-0 pt-1.5">Income type</span>
+            <div className="flex flex-wrap gap-1.5">
+              {INCOME_SOURCES.map(s => (
+                <button key={s.value} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, incomeSource: s.value }))}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
+                    (editForm.incomeSource ?? tx.incomeSource) === s.value
+                      ? "bg-green-500 text-white"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-start gap-3">
+            <span className="text-[12px] text-muted-foreground w-24 shrink-0 pt-1.5">Category</span>
+            <div className="flex flex-wrap gap-1.5">
+              {CATEGORIES.map(cat => (
+                <button key={cat} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, category: cat }))}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
+                    (editForm.category ?? tx.category) === cat
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  )}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-1">
+          <button onClick={cancelEdit}
+            className="flex-1 py-2 rounded-xl bg-muted text-[13px] font-medium text-muted-foreground hover:bg-muted/70 transition-colors">
+            Cancel
+          </button>
+          <button onClick={() => saveEdit(tx.tempId)}
+            className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold transition-colors">
+            Save
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5">
+      {isCredit ? (
+        <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+          <TrendingUp className="w-4 h-4 text-green-500" />
+        </div>
+      ) : (
+        <CategoryIcon category={tx.category} size="sm" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          <p className="text-[14px] font-medium text-foreground truncate">{tx.description}</p>
+          {isCredit && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 shrink-0">
+              CREDIT
+            </span>
+          )}
+        </div>
+        <p className="text-[12px] text-muted-foreground mt-0.5">
+          {format(new Date(tx.date + "T00:00:00"), "dd MMM yyyy")} ·{" "}
+          {isCredit
+            ? INCOME_SOURCES.find(s => s.value === tx.incomeSource)?.label ?? "Other"
+            : tx.category}
+        </p>
+      </div>
+      <span className={cn(
+        "text-[14px] font-semibold shrink-0",
+        isCredit ? "text-green-500" : "text-foreground"
+      )}>
+        {isCredit ? "+" : ""}{fmt(tx.amount)}
+      </span>
+      <div className="flex items-center gap-0.5 shrink-0 ml-1">
+        <button onClick={() => startEdit(tx)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-muted transition-colors">
+          <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+        </button>
+        <button onClick={() => handleDelete(tx.tempId)}
+          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-destructive/10 transition-colors">
+          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+        </button>
       </div>
     </div>
   );

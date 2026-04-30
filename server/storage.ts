@@ -33,6 +33,7 @@ export interface IStorage {
   getGmailSync(): Promise<GmailSync | undefined>;
   upsertGmailSync(data: Partial<GmailSync>): Promise<GmailSync>;
   expenseExistsByExternalId(externalId: string): Promise<boolean>;
+  incomeExistsByExternalId(externalId: string): Promise<boolean>;
   // Investments
   getInvestments(): Promise<Investment[]>;
   createInvestment(data: InsertInvestment): Promise<Investment>;
@@ -117,6 +118,14 @@ export class DatabaseStorage implements IStorage {
     const [found] = await db.select({ id: expenses.id })
       .from(expenses)
       .where(eq(expenses.externalId, externalId))
+      .limit(1);
+    return !!found;
+  }
+
+  async incomeExistsByExternalId(externalId: string): Promise<boolean> {
+    const [found] = await db.select({ id: income.id })
+      .from(income)
+      .where(eq(income.externalId, externalId))
       .limit(1);
     return !!found;
   }

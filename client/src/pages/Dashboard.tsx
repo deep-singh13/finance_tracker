@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
-import type { Subscription } from "@shared/schema";
+import type { Subscription, Investment } from "@shared/schema";
 
 function ordinal(n: number) {
   const s = ["th", "st", "nd", "rd"];
@@ -77,14 +77,23 @@ export default function Dashboard() {
       return res.json();
     },
   });
+  const { data: investments } = useQuery<Investment[]>({
+    queryKey: ["/api/investments"],
+    queryFn: async () => {
+      const res = await fetch("/api/investments", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+  });
   const currentMonthStr = format(new Date(), "yyyy-MM");
   const { data: budgetData } = useBudget(currentMonthStr);
   const setBudgetMutation = useSetBudget();
   const [newBudget, setNewBudget] = useState("");
 
-  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
+  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
     if (!expenses) return {
       todayTotal: 0, weekTotal: 0, monthTotal: 0, lastMonthTotal: 0, monthlyIncomeTotal: 0,
+      monthlySIPTotal: 0,
       categoryData: [], monthlyInsights: null,
       weeklyTrend: [], monthlyTrend: []
     };
@@ -114,6 +123,11 @@ export default function Dashboard() {
       .filter(i => i.date.startsWith(currentMonthStr))
       .reduce((sum, i) => sum + i.amount, 0);
 
+    // Active SIP investments represent a fixed monthly outflow
+    const sipTotal = (investments ?? [])
+      .filter(inv => inv.type === "SIP" && inv.isActive)
+      .reduce((sum, inv) => sum + inv.amount, 0);
+
     const insights = calculateMonthlyInsights(expenses);
     const weeklyT = calculateWeeklyTotals(expenses);
     const monthlyT = calculateMonthlyTotals(expenses);
@@ -126,10 +140,11 @@ export default function Dashboard() {
     return {
       todayTotal: today, weekTotal: week, monthTotal: month, lastMonthTotal: lastMonth,
       monthlyIncomeTotal: monthlyInc,
+      monthlySIPTotal: sipTotal,
       categoryData: chartData, monthlyInsights: insights,
       weeklyTrend: weeklyT, monthlyTrend: monthlyT
     };
-  }, [expenses, incomeList, currentMonthStr]);
+  }, [expenses, incomeList, investments, currentMonthStr]);
 
   // Upcoming subscriptions this month (billing day hasn't passed yet or last billed != this month)
   const upcomingSubscriptions = useMemo(() => {
@@ -169,7 +184,8 @@ export default function Dashboard() {
     ? ((monthTotal - lastMonthTotal) / lastMonthTotal) * 100
     : null;
 
-  const netCashFlow = monthlyIncomeTotal - monthTotal;
+  // Net cash flow includes investments as an outflow, but budget only tracks expenses
+  const netCashFlow = monthlyIncomeTotal - monthTotal - monthlySIPTotal;
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
@@ -269,6 +285,9 @@ export default function Dashboard() {
             <div className="text-right text-[13px] text-muted-foreground space-y-0.5">
               <div>Income: <span className="font-medium text-green-600 dark:text-green-400">+₹{formatAmount(monthlyIncomeTotal)}</span></div>
               <div>Expenses: <span className="font-medium text-foreground">−₹{formatAmount(monthTotal)}</span></div>
+              {monthlySIPTotal > 0 && (
+                <div>Investments: <span className="font-medium text-foreground">−₹{formatAmount(monthlySIPTotal)}</span></div>
+              )}
             </div>
           </div>
         )}

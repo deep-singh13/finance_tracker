@@ -9,9 +9,11 @@ import { requireAuth, handleLogin, handleLogout, handleMe, loginRateLimiter } fr
 const parsedTransactionSchema = z.object({
   amount: z.number().positive(),       // in paise
   description: z.string().min(1),
-  category: z.string().min(1),
+  category: z.string().default("Miscellaneous"), // for debits
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   externalId: z.string().min(1),       // Gmail message ID for deduplication
+  type: z.enum(["debit", "credit"]).default("debit"),
+  incomeSource: z.enum(["salary", "freelance", "investment", "other"]).default("other"), // for credits
 });
 
 const syncPayloadSchema = z.object({
@@ -23,9 +25,11 @@ interface StagedTransaction {
   tempId: string;
   amount: number;
   description: string;
-  category: string;
+  category: string;       // used for debits
   date: string;
   externalId: string;
+  type: "debit" | "credit";
+  incomeSource: "salary" | "freelance" | "investment" | "other"; // used for credits
 }
 let staged: StagedTransaction[] = [];
 
@@ -95,7 +99,10 @@ export async function registerRoutes(
       const { transactions } = syncPayloadSchema.parse(req.body);
       const newTxs: StagedTransaction[] = [];
       for (const tx of transactions) {
-        const exists = await storage.expenseExistsByExternalId(tx.externalId);
+        // Check the right table based on type
+        const exists = tx.type === "credit"
+          ? await storage.incomeExistsByExternalId(tx.externalId)
+          : await storage.expenseExistsByExternalId(tx.externalId);
         if (!exists) newTxs.push({ tempId: randomUUID(), ...tx });
       }
       staged = newTxs;
@@ -175,11 +182,12 @@ export async function registerRoutes(
   app.put("/api/gmail/staged/:tempId", (req, res) => {
     const idx = staged.findIndex(t => t.tempId === req.params.tempId);
     if (idx === -1) return res.status(404).json({ message: "Not found" });
-    const { amount, description, category, date } = req.body;
+    const { amount, description, category, date, incomeSource } = req.body;
     if (amount !== undefined) staged[idx].amount = amount;
     if (description !== undefined) staged[idx].description = description;
     if (category !== undefined) staged[idx].category = category;
     if (date !== undefined) staged[idx].date = date;
+    if (incomeSource !== undefined) staged[idx].incomeSource = incomeSource;
     res.json(staged[idx]);
   });
 
@@ -195,17 +203,31 @@ export async function registerRoutes(
   app.post("/api/gmail/commit", async (_req, res) => {
     let imported = 0;
     for (const tx of staged) {
-      const exists = await storage.expenseExistsByExternalId(tx.externalId);
-      if (!exists) {
-        await storage.createExpense({
-          amount: tx.amount,
-          description: tx.description,
-          category: tx.category,
-          date: tx.date,
-          source: "gmail",
-          externalId: tx.externalId,
-        });
-        imported++;
+      if (tx.type === "credit") {
+        const exists = await storage.incomeExistsByExternalId(tx.externalId);
+        if (!exists) {
+          await storage.createIncome({
+            amount: tx.amount,
+            description: tx.description,
+            source: tx.incomeSource,
+            date: tx.date,
+            externalId: tx.externalId,
+          });
+          imported++;
+        }
+      } else {
+        const exists = await storage.expenseExistsByExternalId(tx.externalId);
+        if (!exists) {
+          await storage.createExpense({
+            amount: tx.amount,
+            description: tx.description,
+            category: tx.category,
+            date: tx.date,
+            source: "gmail",
+            externalId: tx.externalId,
+          });
+          imported++;
+        }
       }
     }
     staged = [];

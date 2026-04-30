@@ -20,6 +20,7 @@ export const income = pgTable("income", {
   description: text("description").notNull(),
   source: text("source").notNull().default("other"), // 'salary' | 'freelance' | 'investment' | 'other'
   date: date("date").notNull(), // YYYY-MM-DD
+  externalId: text("external_id"), // Gmail message ID for deduplication
   createdAt: timestamp("created_at").defaultNow(),
 });
 
