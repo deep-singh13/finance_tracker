@@ -9,6 +9,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Investments from "@/pages/Investments";
 import Subscriptions from "@/pages/Subscriptions";
+import Income from "@/pages/Income";
 import Login from "@/pages/Login";
 import { History } from "@/components/History";
 import { useAuth, useLogout } from "@/hooks/use-auth";
@@ -35,6 +36,7 @@ function TabBar() {
 
   const tabs = [
     { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
+    { href: "/income",        label: "Income",        icon: Wallet },
     { href: "/investments",   label: "Investments",   icon: TrendingUp },
     { href: "/subscriptions", label: "Subscriptions", icon: RefreshCw },
     { href: "/history",       label: "History",       icon: HistoryIcon },
@@ -70,6 +72,7 @@ function Router() {
     <div className="pb-20">
       <Switch>
         <Route path="/" component={Dashboard} />
+        <Route path="/income" component={Income} />
         <Route path="/investments" component={Investments} />
         <Route path="/subscriptions" component={Subscriptions} />
         <Route path="/history" component={History} />
