@@ -5,7 +5,6 @@ import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
 import { ExpenseModal } from "@/components/ExpenseModal";
-import { ExpenseList } from "@/components/ExpenseList";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -60,7 +59,7 @@ function calculateMonthlyTotals(expenses: ExpenseResponse[]) {
 const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4"];
 
 export default function Dashboard() {
-  const { data: expenses, isLoading } = useExpenses();
+  const { data: expenses } = useExpenses();
   const { data: incomeList } = useIncome();
   const { data: subscriptions } = useQuery<Subscription[]>({
     queryKey: ["/api/subscriptions"],
@@ -158,7 +157,7 @@ export default function Dashboard() {
         <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-indigo-600/20 blur-2xl pointer-events-none" />
 
-        <div className="max-w-2xl mx-auto relative">
+        <div className="max-w-2xl mx-auto md:max-w-none relative">
           {/* Header row */}
           <div className="flex items-center justify-between mb-8">
             <div>
@@ -218,11 +217,11 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <main className="px-4 max-w-2xl mx-auto pb-8 space-y-4 mt-4">
-        {/* ── Budget alert ─────────────────────────────────────────── */}
+      <main className="px-4 md:px-8 max-w-2xl md:max-w-none mx-auto pb-8 mt-4">
+        {/* ── Budget alert — full width ─────────────────────────────── */}
         {budget > 0 && budgetPct >= 80 && (
           <div className={cn(
-            "flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-medium",
+            "flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-medium mb-4",
             budgetPct >= 100
               ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
               : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
@@ -234,261 +233,264 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* ── Net Cash Flow ─────────────────────────────────────────── */}
-        {monthlyIncomeTotal > 0 && (
-          <div className="bg-card rounded-2xl border border-border/50 shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-border/40">
-              <p className="section-label">Net Cash Flow — {format(new Date(), "MMMM")}</p>
-            </div>
-            <div className="px-5 py-4 flex items-center justify-between">
-              <div>
-                <div className="flex items-baseline gap-1">
-                  <span className="text-[14px] text-muted-foreground">₹</span>
-                  <span className={cn(
-                    "text-[32px] font-bold tracking-tight",
-                    netCashFlow >= 0 ? "text-emerald-500" : "text-red-500"
-                  )}>
-                    {netCashFlow >= 0 ? "+" : "-"}{fmt(Math.abs(netCashFlow))}
-                  </span>
+        {/* ── Desktop: 2-col grid · Mobile: single column ───────────── */}
+        <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 md:items-start">
+
+          {/* ── Left column ─────────────────────────────────────────── */}
+          <div className="space-y-4">
+            {/* Net Cash Flow */}
+            {monthlyIncomeTotal > 0 && (
+              <div className="bg-card rounded-2xl border border-border/50 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-border/40">
+                  <p className="section-label">Net Cash Flow — {format(new Date(), "MMMM")}</p>
                 </div>
-                <span className={cn(
-                  "text-[12px] font-medium mt-0.5",
-                  netCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-                )}>
-                  {netCashFlow >= 0 ? "Positive — you're saving" : "Negative — spending exceeds income"}
-                </span>
-              </div>
-              <div className="text-right space-y-1.5 text-[12px] text-muted-foreground">
-                <div className="flex items-center justify-end gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                  Income <span className="font-semibold text-emerald-600 dark:text-emerald-400">+₹{fmt(monthlyIncomeTotal)}</span>
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                  Expenses <span className="font-semibold text-foreground">−₹{fmt(monthTotal)}</span>
-                </div>
-                {monthlySIPTotal > 0 && (
-                  <div className="flex items-center justify-end gap-2">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                    Investments <span className="font-semibold text-foreground">−₹{fmt(monthlySIPTotal)}</span>
+                <div className="px-5 py-4 flex items-center justify-between">
+                  <div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-[14px] text-muted-foreground">₹</span>
+                      <span className={cn(
+                        "text-[32px] font-bold tracking-tight",
+                        netCashFlow >= 0 ? "text-emerald-500" : "text-red-500"
+                      )}>
+                        {netCashFlow >= 0 ? "+" : "-"}{fmt(Math.abs(netCashFlow))}
+                      </span>
+                    </div>
+                    <span className={cn(
+                      "text-[12px] font-medium mt-0.5",
+                      netCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                    )}>
+                      {netCashFlow >= 0 ? "Positive — you're saving" : "Negative — spending exceeds income"}
+                    </span>
                   </div>
+                  <div className="text-right space-y-1.5 text-[12px] text-muted-foreground">
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      Income <span className="font-semibold text-emerald-600 dark:text-emerald-400">+₹{fmt(monthlyIncomeTotal)}</span>
+                    </div>
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                      Expenses <span className="font-semibold text-foreground">−₹{fmt(monthTotal)}</span>
+                    </div>
+                    {monthlySIPTotal > 0 && (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                        Investments <span className="font-semibold text-foreground">−₹{fmt(monthlySIPTotal)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Budget card */}
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+              <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Target className="w-4 h-4 text-primary" />
+                  <p className="section-label">Monthly Budget</p>
+                </div>
+                {budget > 0 && (
+                  <span className={cn(
+                    "text-[11px] font-bold px-2 py-0.5 rounded-full",
+                    budgetPct >= 100 ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                      : budgetPct >= 80 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                      : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                  )}>
+                    {Math.round(budgetPct)}%
+                  </span>
+                )}
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Set monthly budget (₹)"
+                    value={newBudget}
+                    onChange={e => setNewBudget(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSetBudget()}
+                    className="rounded-xl h-10 text-[14px]"
+                    inputMode="numeric"
+                  />
+                  <Button onClick={handleSetBudget} className="rounded-xl h-10 px-5 shrink-0 cursor-pointer">Set</Button>
+                </div>
+                {budget > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className={cn(
+                            "h-full rounded-full transition-all duration-700",
+                            budgetPct >= 100 ? "bg-red-500"
+                              : budgetPct >= 80 ? "bg-amber-500"
+                              : "bg-primary"
+                          )}
+                          style={{ width: `${budgetProgress}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[12px] text-muted-foreground">
+                        <span>Spent ₹{fmt(monthTotal)}</span>
+                        <span>Budget ₹{fmt(budget)}</span>
+                      </div>
+                    </div>
+                    <div className={cn(
+                      "flex items-center justify-between px-4 py-3 rounded-xl",
+                      remaining < 0 ? "bg-red-500/8" : "bg-emerald-500/8"
+                    )}>
+                      <span className="text-[13px] text-muted-foreground">
+                        {remaining < 0 ? "Over budget" : "Remaining"}
+                      </span>
+                      <span className={cn(
+                        "text-[16px] font-bold",
+                        remaining < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                      )}>
+                        {remaining < 0 ? "-" : "+"}₹{fmt(Math.abs(remaining))}
+                      </span>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
-          </div>
-        )}
 
-        {/* ── Budget card ───────────────────────────────────────────── */}
-        <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-          <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target className="w-4 h-4 text-primary" />
-              <p className="section-label">Monthly Budget</p>
-            </div>
-            {budget > 0 && (
-              <span className={cn(
-                "text-[11px] font-bold px-2 py-0.5 rounded-full",
-                budgetPct >= 100 ? "bg-red-500/15 text-red-600 dark:text-red-400"
-                  : budgetPct >= 80 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                  : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-              )}>
-                {Math.round(budgetPct)}%
-              </span>
+            {/* Upcoming subscriptions */}
+            {upcomingSubscriptions.length > 0 && (
+              <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+                <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-primary" />
+                  <p className="section-label">Upcoming This Month</p>
+                </div>
+                <div className="divide-y divide-border/40">
+                  {upcomingSubscriptions.map(s => (
+                    <div key={s.id} className="flex items-center justify-between px-5 py-3.5">
+                      <div>
+                        <p className="text-[14px] font-medium text-foreground">{s.name}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">Due {ordinal(s.billingDay)}</p>
+                      </div>
+                      <span className="text-[14px] font-semibold text-foreground">₹{fmt(s.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between px-5 py-3.5 bg-muted/30">
+                    <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Total upcoming</span>
+                    <span className="text-[14px] font-bold text-foreground">
+                      ₹{fmt(upcomingSubscriptions.reduce((s, x) => s + x.amount, 0))}
+                    </span>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-          <div className="px-5 py-4 space-y-4">
-            {/* Set budget input */}
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                placeholder="Set monthly budget (₹)"
-                value={newBudget}
-                onChange={e => setNewBudget(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && handleSetBudget()}
-                className="rounded-xl h-10 text-[14px]"
-                inputMode="numeric"
-              />
-              <Button onClick={handleSetBudget} className="rounded-xl h-10 px-5 shrink-0 cursor-pointer">Set</Button>
-            </div>
 
-            {budget > 0 && (
+          {/* ── Right column ─────────────────────────────────────────── */}
+          <div className="space-y-4">
+            {categoryData.length > 0 && (
               <>
-                {/* Progress bar */}
-                <div className="space-y-2">
-                  <div className="h-2.5 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={cn(
-                        "h-full rounded-full transition-all duration-700",
-                        budgetPct >= 100 ? "bg-red-500"
-                          : budgetPct >= 80 ? "bg-amber-500"
-                          : "bg-primary"
-                      )}
-                      style={{ width: `${budgetProgress}%` }}
-                    />
+                {/* Category breakdown */}
+                <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+                  <div className="px-5 py-4 border-b border-border/40">
+                    <p className="section-label">Category Breakdown — {format(new Date(), "MMMM")}</p>
                   </div>
-                  <div className="flex justify-between text-[12px] text-muted-foreground">
-                    <span>Spent ₹{fmt(monthTotal)}</span>
-                    <span>Budget ₹{fmt(budget)}</span>
+                  <div className="px-2 py-4 h-[260px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={categoryData}
+                          cx="50%" cy="50%"
+                          innerRadius={64} outerRadius={88}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {categoryData.map((_, i) => (
+                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="transparent" />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(v: number) => [`₹${v.toFixed(2)}`, ""]}
+                          contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
+                        />
+                        <Legend verticalAlign="bottom" height={40} iconType="circle" iconSize={8}
+                          wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* Remaining / over */}
-                <div className={cn(
-                  "flex items-center justify-between px-4 py-3 rounded-xl",
-                  remaining < 0 ? "bg-red-500/8" : "bg-emerald-500/8"
-                )}>
-                  <span className="text-[13px] text-muted-foreground">
-                    {remaining < 0 ? "Over budget" : "Remaining"}
-                  </span>
-                  <span className={cn(
-                    "text-[16px] font-bold",
-                    remaining < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
-                  )}>
-                    {remaining < 0 ? "-" : "+"}₹{fmt(Math.abs(remaining))}
-                  </span>
+                {/* Monthly insights */}
+                <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+                  <div className="px-5 py-4 border-b border-border/40">
+                    <p className="section-label">Monthly Insights</p>
+                  </div>
+                  <div className="divide-y divide-border/40">
+                    {[
+                      { label: "Total Spent", value: `₹${fmt(monthlyInsights?.total || 0)}` },
+                      {
+                        label: "vs Last Month",
+                        value: monthVsLastPct !== null
+                          ? `${monthVsLastPct > 0 ? "+" : ""}${monthVsLastPct.toFixed(1)}%`
+                          : "—",
+                        color: monthVsLastPct == null ? undefined
+                          : monthVsLastPct === 0 ? undefined
+                          : monthVsLastPct > 0 ? "text-red-600 dark:text-red-400"
+                          : "text-emerald-600 dark:text-emerald-400",
+                      },
+                      { label: "Top Category", value: monthlyInsights?.topCategory ? `${monthlyInsights.topCategory.name} · ₹${fmt(monthlyInsights.topCategory.amount)}` : "—" },
+                      { label: "Daily Average", value: `₹${fmt(monthlyInsights?.dailyAvg || 0)}` },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="flex justify-between items-center px-5 py-3.5">
+                        <span className="text-[13px] text-muted-foreground">{label}</span>
+                        <span className={cn("text-[14px] font-semibold", color)}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Spending trends */}
+                <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+                  <div className="px-5 py-4 border-b border-border/40">
+                    <p className="section-label">Spending Trends</p>
+                  </div>
+                  <div className="px-4 py-5 space-y-8">
+                    <div>
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 7 days</p>
+                      <div className="h-[180px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={weeklyTrend} barSize={18}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={40} />
+                            <Tooltip
+                              formatter={(v: number) => [`₹${v.toFixed(2)}`, "Spent"]}
+                              contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
+                              cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
+                            />
+                            <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 6 months</p>
+                      <div className="h-[180px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={monthlyTrend} barSize={22}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={40} />
+                            <Tooltip
+                              formatter={(v: number) => [`₹${v.toFixed(2)}`, "Spent"]}
+                              contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
+                              cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
+                            />
+                            <Bar dataKey="total" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </>
             )}
           </div>
+
         </div>
-
-        {/* ── Upcoming subscriptions ────────────────────────────────── */}
-        {upcomingSubscriptions.length > 0 && (
-          <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-            <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
-              <CalendarClock className="w-4 h-4 text-primary" />
-              <p className="section-label">Upcoming This Month</p>
-            </div>
-            <div className="divide-y divide-border/40">
-              {upcomingSubscriptions.map(s => (
-                <div key={s.id} className="flex items-center justify-between px-5 py-3.5">
-                  <div>
-                    <p className="text-[14px] font-medium text-foreground">{s.name}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5">Due {ordinal(s.billingDay)}</p>
-                  </div>
-                  <span className="text-[14px] font-semibold text-foreground">₹{fmt(s.amount)}</span>
-                </div>
-              ))}
-              <div className="flex items-center justify-between px-5 py-3.5 bg-muted/30">
-                <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Total upcoming</span>
-                <span className="text-[14px] font-bold text-foreground">
-                  ₹{fmt(upcomingSubscriptions.reduce((s, x) => s + x.amount, 0))}
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── Charts ────────────────────────────────────────────────── */}
-        {categoryData.length > 0 && (
-          <>
-            {/* Category breakdown */}
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-              <div className="px-5 py-4 border-b border-border/40">
-                <p className="section-label">Category Breakdown — {format(new Date(), "MMMM")}</p>
-              </div>
-              <div className="px-2 py-4 h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%" cy="50%"
-                      innerRadius={64} outerRadius={88}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {categoryData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="transparent" />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      formatter={(v: number) => [`₹${v.toFixed(2)}`, ""]}
-                      contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
-                    />
-                    <Legend verticalAlign="bottom" height={40} iconType="circle" iconSize={8}
-                      wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Monthly insights */}
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-              <div className="px-5 py-4 border-b border-border/40">
-                <p className="section-label">Monthly Insights</p>
-              </div>
-              <div className="divide-y divide-border/40">
-                {[
-                  { label: "Total Spent", value: `₹${fmt(monthlyInsights?.total || 0)}` },
-                  {
-                    label: "vs Last Month",
-                    value: monthVsLastPct !== null
-                      ? `${monthVsLastPct > 0 ? "+" : ""}${monthVsLastPct.toFixed(1)}%`
-                      : "—",
-                    color: monthVsLastPct == null ? undefined
-                      : monthVsLastPct === 0 ? undefined
-                      : monthVsLastPct > 0 ? "text-red-600 dark:text-red-400"
-                      : "text-emerald-600 dark:text-emerald-400",
-                  },
-                  { label: "Top Category", value: monthlyInsights?.topCategory ? `${monthlyInsights.topCategory.name} · ₹${fmt(monthlyInsights.topCategory.amount)}` : "—" },
-                  { label: "Daily Average", value: `₹${fmt(monthlyInsights?.dailyAvg || 0)}` },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="flex justify-between items-center px-5 py-3.5">
-                    <span className="text-[13px] text-muted-foreground">{label}</span>
-                    <span className={cn("text-[14px] font-semibold", color)}>{value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Spending trends */}
-            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-              <div className="px-5 py-4 border-b border-border/40">
-                <p className="section-label">Spending Trends</p>
-              </div>
-              <div className="px-4 py-5 space-y-8">
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 7 days</p>
-                  <div className="h-[180px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={weeklyTrend} barSize={18}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={40} />
-                        <Tooltip
-                          formatter={(v: number) => [`₹${v.toFixed(2)}`, "Spent"]}
-                          contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
-                          cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
-                        />
-                        <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 6 months</p>
-                  <div className="h-[180px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={monthlyTrend} barSize={22}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={40} />
-                        <Tooltip
-                          formatter={(v: number) => [`₹${v.toFixed(2)}`, "Spent"]}
-                          contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
-                          cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
-                        />
-                        <Bar dataKey="total" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        <ExpenseList expenses={expenses} isLoading={isLoading} />
       </main>
 
       {/* Desktop FAB */}
