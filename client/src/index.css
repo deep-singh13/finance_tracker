@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -19,71 +19,76 @@
   20%, 50%      { opacity: 0; }
 }
 
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
 @layer base {
   :root {
-    --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    
-    /* Apple Light Mode Aesthetic */
-    --background: 240 5% 96%; /* #F2F2F7 - iOS system background */
-    --foreground: 240 10% 4%;
-    
+    --font-sans: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+
+    /* ── Premium Light Mode — Navy + Indigo system ── */
+    --background: 220 30% 96%;       /* #F1F4FA soft blue-grey */
+    --foreground: 222 47% 11%;       /* #0F172A deep navy */
+
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 4%;
-    
+    --card-foreground: 222 47% 11%;
+
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 4%;
-    
-    --primary: 211 100% 50%; /* iOS Blue */
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 217 91% 50%;          /* #1D6AE5 royal blue */
     --primary-foreground: 0 0% 100%;
-    
-    --secondary: 240 5% 96%;
-    --secondary-foreground: 240 10% 4%;
-    
-    --muted: 240 5% 90%;
-    --muted-foreground: 240 4% 46%; /* #8E8E93 - iOS Secondary Text */
-    
-    --accent: 240 5% 96%;
-    --accent-foreground: 240 10% 4%;
-    
-    --destructive: 0 84% 60%; /* iOS Red */
+
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 220 14% 91%;
+    --muted-foreground: 220 9% 42%;
+
+    --accent: 43 96% 48%;            /* #EAA10A warm gold accent */
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 84% 58%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 240 6% 90%;
-    --input: 240 6% 90%;
-    --ring: 211 100% 50%;
-    
-    --radius: 0.75rem; /* 12px for iOS card feel */
+    --border: 220 13% 87%;
+    --input: 220 13% 87%;
+    --ring: 217 91% 50%;
+
+    --radius: 1rem;                  /* 16px — more generous rounding */
   }
 
   .dark {
-    /* Apple Dark Mode Aesthetic */
-    --background: 0 0% 0%; /* Pure black system background */
-    --foreground: 0 0% 100%;
-    
-    --card: 240 4% 11%; /* #1C1C1E - iOS dark card */
-    --card-foreground: 0 0% 100%;
-    
-    --popover: 240 4% 11%;
-    --popover-foreground: 0 0% 100%;
-    
-    --primary: 211 100% 50%;
+    /* ── OLED Premium Dark — Deep Navy system ── */
+    --background: 222 47% 4%;        /* #060B14 near-black navy */
+    --foreground: 210 40% 96%;
+
+    --card: 222 47% 8%;              /* #0F172A primary card surface */
+    --card-foreground: 210 40% 96%;
+
+    --popover: 222 38% 10%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 217 91% 58%;          /* #3B82F6 blue (vivid on dark) */
     --primary-foreground: 0 0% 100%;
-    
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 100%;
-    
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 65%; /* #98989D */
-    
-    --accent: 240 4% 16%;
-    --accent-foreground: 0 0% 100%;
-    
-    --destructive: 0 84% 60%;
+
+    --secondary: 222 32% 14%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 222 32% 12%;
+    --muted-foreground: 215 20% 52%;
+
+    --accent: 43 96% 48%;            /* Gold */
+    --accent-foreground: 222 47% 6%;
+
+    --destructive: 0 84% 58%;
     --destructive-foreground: 0 0% 100%;
-    
-    --border: 240 4% 20%;
-    --input: 240 4% 20%;
-    --ring: 211 100% 50%;
+
+    --border: 222 32% 16%;
+    --input: 222 32% 16%;
+    --ring: 217 91% 58%;
   }
 
   * {
@@ -97,23 +102,67 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Typography scale matching iOS */
-  h1 { @apply text-3xl font-bold tracking-tight; }
+  h1 { @apply text-[32px] font-bold tracking-tight leading-none; }
   h2 { @apply text-2xl font-semibold tracking-tight; }
-  h3 { @apply text-xl font-semibold tracking-tight; }
+  h3 { @apply text-lg font-semibold tracking-tight; }
 }
 
-/* iOS Grouped List Styles */
 @layer components {
+  /* ── Glass card — works in both light & dark ── */
+  .glass-card {
+    @apply rounded-2xl border border-white/10 shadow-lg;
+    background: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* Lighter glass for light mode */
+  :root:not(.dark) .glass-card {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(0, 0, 0, 0.07);
+  }
+
+  /* ── Hero gradient card ── */
+  .hero-gradient {
+    background: linear-gradient(135deg, #0F172A 0%, #1E3A8A 55%, #1D4ED8 100%);
+  }
+
+  .dark .hero-gradient {
+    background: linear-gradient(135deg, #060B14 0%, #0F172A 50%, #1E3A8A 100%);
+  }
+
+  /* ── Gold shimmer text ── */
+  .gold-text {
+    background: linear-gradient(90deg, #EAA10A, #F5C842, #EAA10A);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s linear infinite;
+  }
+
+  /* ── Premium tab bar ── */
+  .tab-bar-glass {
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+  }
+
+  .dark .tab-bar-glass {
+    background: rgba(9, 16, 30, 0.88);
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  /* ── iOS list styles (preserved) ── */
   .ios-list {
     @apply bg-card rounded-2xl overflow-hidden shadow-sm shadow-black/5 border border-border/50;
   }
-  
+
   .ios-list-item {
-    @apply flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/50 transition-colors duration-200;
+    @apply flex items-center justify-between px-4 py-3 bg-card hover:bg-muted/50 transition-colors duration-200 cursor-pointer;
   }
-  
-  /* Apply border to all but last child, offset slightly like iOS */
+
   .ios-list-item:not(:last-child) > .ios-list-content {
     @apply border-b border-border;
   }
@@ -121,8 +170,8 @@
   .ios-list-content {
     @apply flex-1 flex items-center justify-between py-1 ml-3;
   }
-  
-  /* Remove default number input spinners */
+
+  /* ── Remove number input spinners ── */
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;
@@ -130,5 +179,27 @@
   }
   input[type="number"] {
     -moz-appearance: textfield;
+  }
+
+  /* ── Stat pill ── */
+  .stat-pill {
+    @apply flex flex-col gap-0.5 bg-card rounded-2xl px-4 py-3.5 border border-border/50
+           shadow-sm hover:shadow-md transition-shadow duration-200 cursor-default;
+  }
+
+  /* ── Section label ── */
+  .section-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground;
+  }
+
+  /* ── Positive / negative badge ── */
+  .badge-positive {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
+           bg-emerald-500/12 text-emerald-600 dark:text-emerald-400;
+  }
+
+  .badge-negative {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold
+           bg-red-500/12 text-red-600 dark:text-red-400;
   }
 }

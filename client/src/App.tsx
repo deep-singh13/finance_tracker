@@ -35,31 +35,48 @@ function TabBar() {
   const logout = useLogout();
 
   const tabs = [
-    { href: "/",              label: "Dashboard",     icon: LayoutDashboard },
+    { href: "/",              label: "Overview",      icon: LayoutDashboard },
     { href: "/income",        label: "Income",        icon: Wallet },
-    { href: "/investments",   label: "Investments",   icon: TrendingUp },
-    { href: "/subscriptions", label: "Subscriptions", icon: RefreshCw },
+    { href: "/investments",   label: "Invest",        icon: TrendingUp },
+    { href: "/subscriptions", label: "Subs",          icon: RefreshCw },
     { href: "/history",       label: "History",       icon: HistoryIcon },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-xl border-t border-border flex justify-around items-center py-2 pb-safe z-50">
-      {tabs.map(({ href, label, icon: Icon }) => (
-        <Link key={href} href={href}>
-          <a className={`flex flex-col items-center gap-1 p-2 min-w-[56px] ${location === href ? "text-primary" : "text-muted-foreground"}`}>
-            <Icon className="w-6 h-6" />
-            <span className="text-[10px] font-medium">{label}</span>
-          </a>
-        </Link>
-      ))}
-      {/* Logout button */}
+    <nav className="tab-bar-glass fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 py-2 pb-safe z-50">
+      {tabs.map(({ href, label, icon: Icon }) => {
+        const active = location === href;
+        return (
+          <Link key={href} href={href}>
+            <a className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer transition-all duration-200 group"
+               aria-label={label}>
+              <span className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-200 ${
+                active
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30"
+                  : "text-muted-foreground group-hover:text-foreground group-hover:bg-muted/60"
+              }`}>
+                <Icon className="w-[18px] h-[18px]" />
+              </span>
+              <span className={`text-[9.5px] font-semibold tracking-wide transition-colors duration-200 ${
+                active ? "text-primary" : "text-muted-foreground"
+              }`}>
+                {label}
+              </span>
+            </a>
+          </Link>
+        );
+      })}
       <button
         onClick={logout}
-        className="flex flex-col items-center gap-1 p-2 min-w-[56px] text-muted-foreground hover:text-destructive transition-colors"
+        className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer transition-all duration-200 group"
         aria-label="Lock / Logout"
       >
-        <LogOut className="w-6 h-6" />
-        <span className="text-[10px] font-medium">Lock</span>
+        <span className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground group-hover:text-destructive group-hover:bg-destructive/10 transition-all duration-200">
+          <LogOut className="w-[18px] h-[18px]" />
+        </span>
+        <span className="text-[9.5px] font-semibold tracking-wide text-muted-foreground group-hover:text-destructive transition-colors duration-200">
+          Lock
+        </span>
       </button>
     </nav>
   );

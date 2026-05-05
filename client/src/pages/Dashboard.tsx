@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { format, isToday, parseISO, startOfWeek, isAfter, isSameMonth, subWeeks, subMonths, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
-import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock } from "lucide-react";
+import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target } from "lucide-react";
 import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
@@ -10,7 +10,6 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
 import type { Subscription, Investment } from "@shared/schema";
@@ -21,19 +20,16 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
-// FEATURE 2 — Monthly Insights Section
 function calculateMonthlyInsights(expenses: ExpenseResponse[]) {
   const now = new Date();
   const monthExpenses = expenses.filter(e => isSameMonth(parseISO(e.date), now));
   const total = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
-  
   const categories: Record<string, number> = {};
   monthExpenses.forEach(e => {
     categories[e.category] = (categories[e.category] || 0) + e.amount;
   });
   const topCat = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
   const daysInMonth = now.getDate();
-  
   return {
     total,
     topCategory: topCat ? { name: topCat[0], amount: topCat[1] } : null,
@@ -41,15 +37,12 @@ function calculateMonthlyInsights(expenses: ExpenseResponse[]) {
   };
 }
 
-// FEATURE 5 — Weekly and Monthly Totals
 function calculateWeeklyTotals(expenses: ExpenseResponse[]) {
   const now = new Date();
   const last7Days = eachDayOfInterval({ start: subWeeks(now, 6), end: now });
   return last7Days.map(day => {
     const dayStr = format(day, "yyyy-MM-dd");
-    const total = expenses
-      .filter(e => e.date === dayStr)
-      .reduce((sum, e) => sum + e.amount, 0);
+    const total = expenses.filter(e => e.date === dayStr).reduce((sum, e) => sum + e.amount, 0);
     return { name: format(day, "EEE"), total: total / 100 };
   });
 }
@@ -59,12 +52,12 @@ function calculateMonthlyTotals(expenses: ExpenseResponse[]) {
   const last6Months = eachMonthOfInterval({ start: subMonths(now, 5), end: now });
   return last6Months.map(m => {
     const mStr = format(m, "yyyy-MM");
-    const total = expenses
-      .filter(e => e.date.startsWith(mStr))
-      .reduce((sum, e) => sum + e.amount, 0);
+    const total = expenses.filter(e => e.date.startsWith(mStr)).reduce((sum, e) => sum + e.amount, 0);
     return { name: format(m, "MMM"), total: total / 100 };
   });
 }
+
+const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4"];
 
 export default function Dashboard() {
   const { data: expenses, isLoading } = useExpenses();
@@ -85,6 +78,7 @@ export default function Dashboard() {
       return res.json();
     },
   });
+
   const currentMonthStr = format(new Date(), "yyyy-MM");
   const { data: budgetData } = useBudget(currentMonthStr);
   const setBudgetMutation = useSetBudget();
@@ -92,18 +86,13 @@ export default function Dashboard() {
 
   const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
     if (!expenses) return {
-      todayTotal: 0, weekTotal: 0, monthTotal: 0, lastMonthTotal: 0, monthlyIncomeTotal: 0,
-      monthlySIPTotal: 0,
-      categoryData: [], monthlyInsights: null,
-      weeklyTrend: [], monthlyTrend: []
+      todayTotal: 0, weekTotal: 0, monthTotal: 0, lastMonthTotal: 0,
+      monthlyIncomeTotal: 0, monthlySIPTotal: 0,
+      categoryData: [], monthlyInsights: null, weeklyTrend: [], monthlyTrend: []
     };
 
-    let today = 0;
-    let week = 0;
-    let month = 0;
-    let lastMonth = 0;
+    let today = 0, week = 0, month = 0, lastMonth = 0;
     const allCategories: Record<string, number> = {};
-
     const now = new Date();
     const startOfCurrentWeek = startOfWeek(now, { weekStartsOn: 1 });
     const lastMonthStr = format(subMonths(now, 1), "yyyy-MM");
@@ -123,355 +112,393 @@ export default function Dashboard() {
       .filter(i => i.date.startsWith(currentMonthStr))
       .reduce((sum, i) => sum + i.amount, 0);
 
-    // Active SIP investments represent a fixed monthly outflow
     const sipTotal = (investments ?? [])
       .filter(inv => inv.type === "SIP" && inv.isActive)
       .reduce((sum, inv) => sum + inv.amount, 0);
 
-    const insights = calculateMonthlyInsights(expenses);
-    const weeklyT = calculateWeeklyTotals(expenses);
-    const monthlyT = calculateMonthlyTotals(expenses);
-
-    const chartData = Object.entries(allCategories).map(([name, value]) => ({
-      name,
-      value: value / 100
-    }));
-
     return {
       todayTotal: today, weekTotal: week, monthTotal: month, lastMonthTotal: lastMonth,
-      monthlyIncomeTotal: monthlyInc,
-      monthlySIPTotal: sipTotal,
-      categoryData: chartData, monthlyInsights: insights,
-      weeklyTrend: weeklyT, monthlyTrend: monthlyT
+      monthlyIncomeTotal: monthlyInc, monthlySIPTotal: sipTotal,
+      categoryData: Object.entries(allCategories).map(([name, value]) => ({ name, value: value / 100 })),
+      monthlyInsights: calculateMonthlyInsights(expenses),
+      weeklyTrend: calculateWeeklyTotals(expenses),
+      monthlyTrend: calculateMonthlyTotals(expenses),
     };
   }, [expenses, incomeList, investments, currentMonthStr]);
 
-  // Upcoming subscriptions this month (billing day hasn't passed yet or last billed != this month)
   const upcomingSubscriptions = useMemo(() => {
     if (!subscriptions) return [];
-    const now = new Date();
-    const todayDay = now.getDate();
+    const todayDay = new Date().getDate();
     return subscriptions.filter(s =>
-      s.isActive &&
-      s.lastBilledMonth !== currentMonthStr &&
-      s.billingDay > todayDay
+      s.isActive && s.lastBilledMonth !== currentMonthStr && s.billingDay > todayDay
     );
   }, [subscriptions, currentMonthStr]);
 
-  const COLORS = ["#007AFF", "#34C759", "#FF9500", "#AF52DE", "#FF3B30", "#5856D6"];
-
-  const formatAmount = (cents: number) => {
-    return (cents / 100).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
-  const handleSetBudget = () => {
-    const amount = parseFloat(newBudget);
-    if (!isNaN(amount)) {
-      setBudgetMutation.mutate({ month: currentMonthStr, amount });
-      setNewBudget("");
-    }
-  };
+  const fmt = (cents: number) =>
+    (cents / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const budget = budgetData?.amount || 0;
   const remaining = budget - monthTotal;
   const budgetProgress = budget > 0 ? Math.min((monthTotal / budget) * 100, 100) : 0;
   const budgetPct = budget > 0 ? (monthTotal / budget) * 100 : 0;
-
-  const monthVsLastPct = lastMonthTotal > 0
-    ? ((monthTotal - lastMonthTotal) / lastMonthTotal) * 100
-    : null;
-
-  // Net cash flow includes investments as an outflow, but budget only tracks expenses
+  const monthVsLastPct = lastMonthTotal > 0 ? ((monthTotal - lastMonthTotal) / lastMonthTotal) * 100 : null;
+  // Net cash flow includes investments as outflow; budget only tracks expenses
   const netCashFlow = monthlyIncomeTotal - monthTotal - monthlySIPTotal;
 
+  const handleSetBudget = () => {
+    const amount = parseFloat(newBudget);
+    if (!isNaN(amount)) { setBudgetMutation.mutate({ month: currentMonthStr, amount }); setNewBudget(""); }
+  };
+
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-primary/20">
-      <header className="px-5 pt-12 pb-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10 border-b border-transparent transition-all">
-        <div className="max-w-2xl mx-auto flex justify-between items-end">
-          <div className="flex flex-col">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-              Spending
-            </h1>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <div className="md:hidden">
+    <div className="min-h-screen bg-background text-foreground">
+      {/* ── Hero card ─────────────────────────────────────────────── */}
+      <div className="hero-gradient px-5 pt-14 pb-8 relative overflow-hidden">
+        {/* Decorative orbs */}
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-indigo-600/20 blur-2xl pointer-events-none" />
+
+        <div className="max-w-2xl mx-auto relative">
+          {/* Header row */}
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <p className="section-label text-blue-200/70 mb-1">{format(new Date(), "MMMM yyyy")}</p>
+              <h1 className="text-2xl font-bold text-white tracking-tight">Overview</h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
               <ExpenseModal>
-                <button className="bg-primary text-primary-foreground p-2 rounded-full shadow-md hover:bg-primary/90 transition-transform active:scale-95">
-                  <Plus className="w-5 h-5" />
+                <button
+                  className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 text-white rounded-xl border border-white/20 transition-all duration-200 cursor-pointer"
+                  aria-label="Add expense"
+                >
+                  <Plus className="w-4 h-4" />
                 </button>
               </ExpenseModal>
             </div>
           </div>
-        </div>
-      </header>
 
-      <main className="px-4 max-w-2xl mx-auto pb-8">
-        {/* Feature 6: Budget alert banner */}
+          {/* Big number */}
+          <div className="mb-6">
+            <p className="text-[13px] font-medium text-blue-200/70 mb-1 uppercase tracking-widest">Spent This Month</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-[13px] font-medium text-white/60">₹</span>
+              <span className="text-[48px] font-bold text-white leading-none tracking-tight">
+                {fmt(monthTotal)}
+              </span>
+            </div>
+            {monthVsLastPct !== null && (
+              <div className="flex items-center gap-1.5 mt-2">
+                {monthVsLastPct > 0
+                  ? <ArrowUpRight className="w-3.5 h-3.5 text-red-400" />
+                  : monthVsLastPct < 0
+                    ? <ArrowDownRight className="w-3.5 h-3.5 text-emerald-400" />
+                    : <Minus className="w-3.5 h-3.5 text-blue-300" />}
+                <span className={cn(
+                  "text-[13px] font-semibold",
+                  monthVsLastPct > 0 ? "text-red-400" : monthVsLastPct < 0 ? "text-emerald-400" : "text-blue-300"
+                )}>
+                  {monthVsLastPct > 0 ? "+" : ""}{monthVsLastPct.toFixed(1)}% vs last month
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Quick stats row */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
+              <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Today</p>
+              <p className="text-[20px] font-bold text-white">₹{fmt(todayTotal)}</p>
+            </div>
+            <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
+              <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">This Week</p>
+              <p className="text-[20px] font-bold text-white">₹{fmt(weekTotal)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <main className="px-4 max-w-2xl mx-auto pb-8 space-y-4 mt-4">
+        {/* ── Budget alert ─────────────────────────────────────────── */}
         {budget > 0 && budgetPct >= 80 && (
           <div className={cn(
-            "mt-4 flex items-center gap-3 px-4 py-3 rounded-2xl text-[14px] font-medium",
+            "flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] font-medium",
             budgetPct >= 100
-              ? "bg-destructive/10 text-destructive border border-destructive/20"
+              ? "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20"
               : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20"
           )}>
             <AlertTriangle className="w-4 h-4 shrink-0" />
             {budgetPct >= 100
-              ? `You've exceeded your ${format(new Date(), "MMMM")} budget by ₹${formatAmount(monthTotal - budget)}`
-              : `You've used ${Math.round(budgetPct)}% of your ${format(new Date(), "MMMM")} budget`}
+              ? `Over budget by ₹${fmt(monthTotal - budget)}`
+              : `${Math.round(budgetPct)}% of ${format(new Date(), "MMMM")} budget used`}
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-          <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/50 flex flex-col justify-center">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              Today
-            </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg text-muted-foreground font-medium">₹</span>
-              <span className="text-2xl font-bold tracking-tight text-foreground">
-                {formatAmount(todayTotal)}
-              </span>
+        {/* ── Net Cash Flow ─────────────────────────────────────────── */}
+        {monthlyIncomeTotal > 0 && (
+          <div className="bg-card rounded-2xl border border-border/50 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border/40">
+              <p className="section-label">Net Cash Flow — {format(new Date(), "MMMM")}</p>
+            </div>
+            <div className="px-5 py-4 flex items-center justify-between">
+              <div>
+                <div className="flex items-baseline gap-1">
+                  <span className="text-[14px] text-muted-foreground">₹</span>
+                  <span className={cn(
+                    "text-[32px] font-bold tracking-tight",
+                    netCashFlow >= 0 ? "text-emerald-500" : "text-red-500"
+                  )}>
+                    {netCashFlow >= 0 ? "+" : "-"}{fmt(Math.abs(netCashFlow))}
+                  </span>
+                </div>
+                <span className={cn(
+                  "text-[12px] font-medium mt-0.5",
+                  netCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                )}>
+                  {netCashFlow >= 0 ? "Positive — you're saving" : "Negative — spending exceeds income"}
+                </span>
+              </div>
+              <div className="text-right space-y-1.5 text-[12px] text-muted-foreground">
+                <div className="flex items-center justify-end gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  Income <span className="font-semibold text-emerald-600 dark:text-emerald-400">+₹{fmt(monthlyIncomeTotal)}</span>
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                  Expenses <span className="font-semibold text-foreground">−₹{fmt(monthTotal)}</span>
+                </div>
+                {monthlySIPTotal > 0 && (
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                    Investments <span className="font-semibold text-foreground">−₹{fmt(monthlySIPTotal)}</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
+        )}
 
-          <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/50 flex flex-col justify-center">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              This Week
-            </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg text-muted-foreground font-medium">₹</span>
-              <span className="text-2xl font-bold tracking-tight text-foreground">
-                {formatAmount(weekTotal)}
-              </span>
+        {/* ── Budget card ───────────────────────────────────────────── */}
+        <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+          <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-primary" />
+              <p className="section-label">Monthly Budget</p>
             </div>
+            {budget > 0 && (
+              <span className={cn(
+                "text-[11px] font-bold px-2 py-0.5 rounded-full",
+                budgetPct >= 100 ? "bg-red-500/15 text-red-600 dark:text-red-400"
+                  : budgetPct >= 80 ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                  : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+              )}>
+                {Math.round(budgetPct)}%
+              </span>
+            )}
           </div>
-
-          <div className="bg-card rounded-2xl p-5 shadow-sm border border-border/50 flex flex-col justify-center">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-              This Month
-            </span>
-            <div className="flex items-baseline gap-1">
-              <span className="text-lg text-muted-foreground font-medium">₹</span>
-              <span className="text-2xl font-bold tracking-tight text-foreground">
-                {formatAmount(monthTotal)}
-              </span>
+          <div className="px-5 py-4 space-y-4">
+            {/* Set budget input */}
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                placeholder="Set monthly budget (₹)"
+                value={newBudget}
+                onChange={e => setNewBudget(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && handleSetBudget()}
+                className="rounded-xl h-10 text-[14px]"
+                inputMode="numeric"
+              />
+              <Button onClick={handleSetBudget} className="rounded-xl h-10 px-5 shrink-0 cursor-pointer">Set</Button>
             </div>
+
+            {budget > 0 && (
+              <>
+                {/* Progress bar */}
+                <div className="space-y-2">
+                  <div className="h-2.5 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className={cn(
+                        "h-full rounded-full transition-all duration-700",
+                        budgetPct >= 100 ? "bg-red-500"
+                          : budgetPct >= 80 ? "bg-amber-500"
+                          : "bg-primary"
+                      )}
+                      style={{ width: `${budgetProgress}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-[12px] text-muted-foreground">
+                    <span>Spent ₹{fmt(monthTotal)}</span>
+                    <span>Budget ₹{fmt(budget)}</span>
+                  </div>
+                </div>
+
+                {/* Remaining / over */}
+                <div className={cn(
+                  "flex items-center justify-between px-4 py-3 rounded-xl",
+                  remaining < 0 ? "bg-red-500/8" : "bg-emerald-500/8"
+                )}>
+                  <span className="text-[13px] text-muted-foreground">
+                    {remaining < 0 ? "Over budget" : "Remaining"}
+                  </span>
+                  <span className={cn(
+                    "text-[16px] font-bold",
+                    remaining < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                  )}>
+                    {remaining < 0 ? "-" : "+"}₹{fmt(Math.abs(remaining))}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Feature 1: Net cash flow card (only shown if income is recorded) */}
-        {monthlyIncomeTotal > 0 && (
-          <div className={cn(
-            "mt-4 bg-card rounded-2xl p-5 shadow-sm border border-border/50 flex items-center justify-between"
-          )}>
-            <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Net Cash Flow — {format(new Date(), "MMMM")}
-              </span>
-              <div className="flex items-baseline gap-1 mt-1">
-                <span className="text-lg text-muted-foreground font-medium">₹</span>
-                <span className={cn(
-                  "text-2xl font-bold tracking-tight",
-                  netCashFlow >= 0 ? "text-green-600 dark:text-green-400" : "text-destructive"
-                )}>
-                  {netCashFlow >= 0 ? "+" : "-"}{formatAmount(Math.abs(netCashFlow))}
+        {/* ── Upcoming subscriptions ────────────────────────────────── */}
+        {upcomingSubscriptions.length > 0 && (
+          <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+            <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+              <CalendarClock className="w-4 h-4 text-primary" />
+              <p className="section-label">Upcoming This Month</p>
+            </div>
+            <div className="divide-y divide-border/40">
+              {upcomingSubscriptions.map(s => (
+                <div key={s.id} className="flex items-center justify-between px-5 py-3.5">
+                  <div>
+                    <p className="text-[14px] font-medium text-foreground">{s.name}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Due {ordinal(s.billingDay)}</p>
+                  </div>
+                  <span className="text-[14px] font-semibold text-foreground">₹{fmt(s.amount)}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between px-5 py-3.5 bg-muted/30">
+                <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Total upcoming</span>
+                <span className="text-[14px] font-bold text-foreground">
+                  ₹{fmt(upcomingSubscriptions.reduce((s, x) => s + x.amount, 0))}
                 </span>
               </div>
-            </div>
-            <div className="text-right text-[13px] text-muted-foreground space-y-0.5">
-              <div>Income: <span className="font-medium text-green-600 dark:text-green-400">+₹{formatAmount(monthlyIncomeTotal)}</span></div>
-              <div>Expenses: <span className="font-medium text-foreground">−₹{formatAmount(monthTotal)}</span></div>
-              {monthlySIPTotal > 0 && (
-                <div>Investments: <span className="font-medium text-foreground">−₹{formatAmount(monthlySIPTotal)}</span></div>
-              )}
             </div>
           </div>
         )}
 
+        {/* ── Charts ────────────────────────────────────────────────── */}
         {categoryData.length > 0 && (
-          <div className="space-y-6 mt-6">
-            <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/50 overflow-hidden">
-              <h3 className="text-[13px] uppercase tracking-widest font-semibold text-muted-foreground mb-4">
-                This Month — Category Breakdown
-              </h3>
-              <div className="h-[240px] w-full">
+          <>
+            {/* Category breakdown */}
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+              <div className="px-5 py-4 border-b border-border/40">
+                <p className="section-label">Category Breakdown — {format(new Date(), "MMMM")}</p>
+              </div>
+              <div className="px-2 py-4 h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
                       data={categoryData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
+                      cx="50%" cy="50%"
+                      innerRadius={64} outerRadius={88}
+                      paddingAngle={4}
                       dataKey="value"
                     >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      {categoryData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="transparent" />
                       ))}
                     </Pie>
-                    <Tooltip 
-                      formatter={(value: number) => `₹${value.toFixed(2)}`}
-                      contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    <Tooltip
+                      formatter={(v: number) => [`₹${v.toFixed(2)}`, ""]}
+                      contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
                     />
-                    <Legend verticalAlign="bottom" height={36}/>
+                    <Legend verticalAlign="bottom" height={40} iconType="circle" iconSize={8}
+                      wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
 
-            <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/50">
-              <h3 className="text-[13px] uppercase tracking-widest font-semibold text-muted-foreground mb-4">
-                Monthly Insights
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total Spent</span>
-                  <span className="font-semibold">₹{formatAmount(monthlyInsights?.total || 0)}</span>
-                </div>
-                {/* Feature 8: month vs last month */}
-                {monthVsLastPct !== null && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">vs Last Month</span>
-                    <span className={cn(
-                      "flex items-center gap-1 font-semibold text-[14px]",
-                      monthVsLastPct === 0 ? "text-muted-foreground" :
-                      monthVsLastPct > 0 ? "text-destructive" : "text-green-600 dark:text-green-400"
-                    )}>
-                      {monthVsLastPct === 0 ? <Minus className="w-3.5 h-3.5" /> :
-                        monthVsLastPct > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                      {monthVsLastPct > 0 ? "+" : ""}{monthVsLastPct.toFixed(1)}%
-                    </span>
+            {/* Monthly insights */}
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+              <div className="px-5 py-4 border-b border-border/40">
+                <p className="section-label">Monthly Insights</p>
+              </div>
+              <div className="divide-y divide-border/40">
+                {[
+                  { label: "Total Spent", value: `₹${fmt(monthlyInsights?.total || 0)}` },
+                  {
+                    label: "vs Last Month",
+                    value: monthVsLastPct !== null
+                      ? `${monthVsLastPct > 0 ? "+" : ""}${monthVsLastPct.toFixed(1)}%`
+                      : "—",
+                    color: monthVsLastPct == null ? undefined
+                      : monthVsLastPct === 0 ? undefined
+                      : monthVsLastPct > 0 ? "text-red-600 dark:text-red-400"
+                      : "text-emerald-600 dark:text-emerald-400",
+                  },
+                  { label: "Top Category", value: monthlyInsights?.topCategory ? `${monthlyInsights.topCategory.name} · ₹${fmt(monthlyInsights.topCategory.amount)}` : "—" },
+                  { label: "Daily Average", value: `₹${fmt(monthlyInsights?.dailyAvg || 0)}` },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="flex justify-between items-center px-5 py-3.5">
+                    <span className="text-[13px] text-muted-foreground">{label}</span>
+                    <span className={cn("text-[14px] font-semibold", color)}>{value}</span>
                   </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Top Category</span>
-                  <span className="font-semibold">
-                    {monthlyInsights?.topCategory
-                      ? `${monthlyInsights.topCategory.name} (₹${formatAmount(monthlyInsights.topCategory.amount)})`
-                      : "N/A"}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Daily Average</span>
-                  <span className="font-semibold">₹{formatAmount(monthlyInsights?.dailyAvg || 0)}</span>
-                </div>
+                ))}
               </div>
             </div>
 
-            {/* Feature 2: Upcoming subscriptions */}
-            {upcomingSubscriptions.length > 0 && (
-              <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/50">
-                <h3 className="text-[13px] uppercase tracking-widest font-semibold text-muted-foreground mb-4 flex items-center gap-2">
-                  <CalendarClock className="w-3.5 h-3.5" />
-                  Upcoming This Month
-                </h3>
-                <div className="space-y-3">
-                  {upcomingSubscriptions.map(s => (
-                    <div key={s.id} className="flex justify-between items-center">
-                      <div>
-                        <span className="text-[15px] font-medium text-foreground">{s.name}</span>
-                        <span className="text-[12px] text-muted-foreground ml-2">
-                          due {ordinal(s.billingDay)}
-                        </span>
-                      </div>
-                      <span className="font-semibold text-foreground">₹{formatAmount(s.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="pt-2 border-t border-border flex justify-between">
-                    <span className="text-[13px] text-muted-foreground">Total upcoming</span>
-                    <span className="font-bold text-foreground">
-                      ₹{formatAmount(upcomingSubscriptions.reduce((s, x) => s + x.amount, 0))}
-                    </span>
-                  </div>
-                </div>
+            {/* Spending trends */}
+            <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
+              <div className="px-5 py-4 border-b border-border/40">
+                <p className="section-label">Spending Trends</p>
               </div>
-            )}
-
-            <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/50">
-              <h3 className="text-[13px] uppercase tracking-widest font-semibold text-muted-foreground mb-4">
-                Monthly Budget
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center gap-2">
-                  <Input 
-                    type="number" 
-                    placeholder="Set budget" 
-                    value={newBudget}
-                    onChange={(e) => setNewBudget(e.target.value)}
-                    className="rounded-xl h-10"
-                  />
-                  <Button onClick={handleSetBudget} className="rounded-xl h-10">Set</Button>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-[13px]">
-                    <span className="text-muted-foreground">Budget: ₹{formatAmount(budget)}</span>
-                    <span className="text-muted-foreground">Spent: ₹{formatAmount(monthTotal)}</span>
+              <div className="px-4 py-5 space-y-8">
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 7 days</p>
+                  <div className="h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={weeklyTrend} barSize={18}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={40} />
+                        <Tooltip
+                          formatter={(v: number) => [`₹${v.toFixed(2)}`, "Spent"]}
+                          contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
+                          cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
+                        />
+                        <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                  <Progress value={budgetProgress} className="h-2" />
-                  <div className="text-right">
-                    <span className={cn(
-                      "text-[15px] font-bold",
-                      remaining < 0 ? "text-destructive" : "text-primary"
-                    )}>
-                      {remaining < 0 ? "Over by: " : "Remaining: "}₹{formatAmount(Math.abs(remaining))}
-                    </span>
+                </div>
+                <div>
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 6 months</p>
+                  <div className="h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthlyTrend} barSize={22}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} width={40} />
+                        <Tooltip
+                          formatter={(v: number) => [`₹${v.toFixed(2)}`, "Spent"]}
+                          contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 8px 24px rgba(0,0,0,0.15)", fontSize: "13px" }}
+                          cursor={{ fill: "hsl(var(--muted))", radius: 6 }}
+                        />
+                        <Bar dataKey="total" fill="#8B5CF6" radius={[6, 6, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="bg-card rounded-2xl p-6 shadow-sm border border-border/50">
-              <h3 className="text-[13px] uppercase tracking-widest font-semibold text-muted-foreground mb-4">
-                Spending Trends
-              </h3>
-              <div className="space-y-8">
-                <div className="h-[200px]">
-                  <p className="text-[11px] font-medium text-muted-foreground mb-2">LAST 7 DAYS</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={weeklyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
-                      <Tooltip 
-                        formatter={(value: number) => `₹${value.toFixed(2)}`}
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      />
-                      <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="h-[200px]">
-                  <p className="text-[11px] font-medium text-muted-foreground mb-2">LAST 6 MONTHS</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={monthlyTrend}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 12, fill: 'hsl(var(--muted-foreground))'}} />
-                      <Tooltip 
-                        formatter={(value: number) => `₹${value.toFixed(2)}`}
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                      />
-                      <Bar dataKey="total" fill="#AF52DE" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
+          </>
         )}
 
         <ExpenseList expenses={expenses} isLoading={isLoading} />
       </main>
 
+      {/* Desktop FAB */}
       <div className="hidden md:block fixed bottom-24 right-8 z-[60]">
         <ExpenseModal>
-          <button type="button" className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 font-semibold text-lg">
-            <Plus className="w-6 h-6" /> Add Expense
+          <button
+            type="button"
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 font-semibold text-[15px] cursor-pointer"
+          >
+            <Plus className="w-5 h-5" /> Add Expense
           </button>
         </ExpenseModal>
       </div>
