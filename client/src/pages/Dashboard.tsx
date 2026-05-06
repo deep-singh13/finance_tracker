@@ -6,6 +6,7 @@ import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
 import { ExpenseModal } from "@/components/ExpenseModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { GmailSyncButton } from "@/components/GmailSyncButton";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -489,6 +490,9 @@ export default function Dashboard() {
               </>
             )}
           </div>
+
+        {/* ── Gmail Sync ───────────────────────────────────────────── */}
+        <GmailSyncButton />
 
         </div>
       </main>
