@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { format, isToday, parseISO, startOfWeek, isAfter, isSameMonth, subWeeks, subMonths, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
-import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target } from "lucide-react";
+import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail } from "lucide-react";
 import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
 import { ExpenseModal } from "@/components/ExpenseModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { GmailSyncButton } from "@/components/GmailSyncButton";
+import { GmailSyncModal } from "@/components/GmailSyncModal";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,8 @@ function calculateMonthlyTotals(expenses: ExpenseResponse[]) {
 const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4"];
 
 export default function Dashboard() {
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [gmailOpen, setGmailOpen] = useState(false);
   const { data: expenses } = useExpenses();
   const { data: incomeList } = useIncome();
   const { data: subscriptions } = useQuery<Subscription[]>({
@@ -150,6 +152,9 @@ export default function Dashboard() {
     if (!isNaN(amount)) { setBudgetMutation.mutate({ month: currentMonthStr, amount }); setNewBudget(""); }
   };
 
+  // Privacy mask — replaces any amount string with ••••••
+  const mask = (val: string) => isPrivate ? "••••••" : val;
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ── Hero card ─────────────────────────────────────────────── */}
@@ -166,6 +171,22 @@ export default function Dashboard() {
               <h1 className="text-2xl font-bold text-white tracking-tight">Overview</h1>
             </div>
             <div className="flex items-center gap-2">
+              {/* Privacy toggle */}
+              <button
+                onClick={() => setIsPrivate(p => !p)}
+                className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 text-white rounded-xl border border-white/20 transition-all duration-200 cursor-pointer"
+                aria-label={isPrivate ? "Show balances" : "Hide balances"}
+              >
+                {isPrivate ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+              {/* Gmail sync */}
+              <button
+                onClick={() => setGmailOpen(true)}
+                className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 text-white rounded-xl border border-white/20 transition-all duration-200 cursor-pointer"
+                aria-label="Sync Gmail"
+              >
+                <Mail className="w-4 h-4" />
+              </button>
               <ThemeToggle />
               <ExpenseModal>
                 <button
@@ -176,18 +197,19 @@ export default function Dashboard() {
                 </button>
               </ExpenseModal>
             </div>
+            <GmailSyncModal open={gmailOpen} onClose={() => setGmailOpen(false)} />
           </div>
 
           {/* Big number */}
           <div className="mb-6">
             <p className="text-[13px] font-medium text-blue-200/70 mb-1 uppercase tracking-widest">Spent This Month</p>
             <div className="flex items-baseline gap-2">
-              <span className="text-[13px] font-medium text-white/60">₹</span>
+              {!isPrivate && <span className="text-[13px] font-medium text-white/60">₹</span>}
               <span className="text-[48px] font-bold text-white leading-none tracking-tight">
-                {fmt(monthTotal)}
+                {mask(fmt(monthTotal))}
               </span>
             </div>
-            {monthVsLastPct !== null && (
+            {!isPrivate && monthVsLastPct !== null && (
               <div className="flex items-center gap-1.5 mt-2">
                 {monthVsLastPct > 0
                   ? <ArrowUpRight className="w-3.5 h-3.5 text-red-400" />
@@ -208,11 +230,11 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
               <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Today</p>
-              <p className="text-[20px] font-bold text-white">₹{fmt(todayTotal)}</p>
+              <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(todayTotal)}`}</p>
             </div>
             <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
               <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">This Week</p>
-              <p className="text-[20px] font-bold text-white">₹{fmt(weekTotal)}</p>
+              <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(weekTotal)}`}</p>
             </div>
           </div>
         </div>
@@ -248,34 +270,36 @@ export default function Dashboard() {
                 <div className="px-5 py-4 flex items-center justify-between">
                   <div>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-[14px] text-muted-foreground">₹</span>
+                      {!isPrivate && <span className="text-[14px] text-muted-foreground">₹</span>}
                       <span className={cn(
                         "text-[32px] font-bold tracking-tight",
                         netCashFlow >= 0 ? "text-emerald-500" : "text-red-500"
                       )}>
-                        {netCashFlow >= 0 ? "+" : "-"}{fmt(Math.abs(netCashFlow))}
+                        {isPrivate ? "••••••" : `${netCashFlow >= 0 ? "+" : "-"}${fmt(Math.abs(netCashFlow))}`}
                       </span>
                     </div>
-                    <span className={cn(
-                      "text-[12px] font-medium mt-0.5",
-                      netCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
-                    )}>
-                      {netCashFlow >= 0 ? "Positive — you're saving" : "Negative — spending exceeds income"}
-                    </span>
+                    {!isPrivate && (
+                      <span className={cn(
+                        "text-[12px] font-medium mt-0.5",
+                        netCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+                      )}>
+                        {netCashFlow >= 0 ? "Positive — you're saving" : "Negative — spending exceeds income"}
+                      </span>
+                    )}
                   </div>
                   <div className="text-right space-y-1.5 text-[12px] text-muted-foreground">
                     <div className="flex items-center justify-end gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      Income <span className="font-semibold text-emerald-600 dark:text-emerald-400">+₹{fmt(monthlyIncomeTotal)}</span>
+                      Income <span className="font-semibold text-emerald-600 dark:text-emerald-400">{isPrivate ? "••••••" : `+₹${fmt(monthlyIncomeTotal)}`}</span>
                     </div>
                     <div className="flex items-center justify-end gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                      Expenses <span className="font-semibold text-foreground">−₹{fmt(monthTotal)}</span>
+                      Expenses <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthTotal)}`}</span>
                     </div>
                     {monthlySIPTotal > 0 && (
                       <div className="flex items-center justify-end gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        Investments <span className="font-semibold text-foreground">−₹{fmt(monthlySIPTotal)}</span>
+                        Investments <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthlySIPTotal)}`}</span>
                       </div>
                     )}
                   </div>
@@ -329,8 +353,8 @@ export default function Dashboard() {
                         />
                       </div>
                       <div className="flex justify-between text-[12px] text-muted-foreground">
-                        <span>Spent ₹{fmt(monthTotal)}</span>
-                        <span>Budget ₹{fmt(budget)}</span>
+                        <span>Spent {isPrivate ? "••••••" : `₹${fmt(monthTotal)}`}</span>
+                        <span>Budget {isPrivate ? "••••••" : `₹${fmt(budget)}`}</span>
                       </div>
                     </div>
                     <div className={cn(
@@ -344,7 +368,7 @@ export default function Dashboard() {
                         "text-[16px] font-bold",
                         remaining < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                       )}>
-                        {remaining < 0 ? "-" : "+"}₹{fmt(Math.abs(remaining))}
+                        {isPrivate ? "••••••" : `${remaining < 0 ? "-" : "+"}₹${fmt(Math.abs(remaining))}`}
                       </span>
                     </div>
                   </>
@@ -366,13 +390,13 @@ export default function Dashboard() {
                         <p className="text-[14px] font-medium text-foreground">{s.name}</p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">Due {ordinal(s.billingDay)}</p>
                       </div>
-                      <span className="text-[14px] font-semibold text-foreground">₹{fmt(s.amount)}</span>
+                      <span className="text-[14px] font-semibold text-foreground">{isPrivate ? "••••••" : `₹${fmt(s.amount)}`}</span>
                     </div>
                   ))}
                   <div className="flex items-center justify-between px-5 py-3.5 bg-muted/30">
                     <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wide">Total upcoming</span>
                     <span className="text-[14px] font-bold text-foreground">
-                      ₹{fmt(upcomingSubscriptions.reduce((s, x) => s + x.amount, 0))}
+                      {isPrivate ? "••••••" : `₹${fmt(upcomingSubscriptions.reduce((s, x) => s + x.amount, 0))}`}
                     </span>
                   </div>
                 </div>
@@ -490,9 +514,6 @@ export default function Dashboard() {
               </>
             )}
           </div>
-
-        {/* ── Gmail Sync ───────────────────────────────────────────── */}
-        <GmailSyncButton />
 
         </div>
       </main>
