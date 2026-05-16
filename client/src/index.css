@@ -150,6 +150,11 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* IBM Plex Sans has full tnum tables — use them everywhere.
+       Every currency amount, percentage, date, and digit in the app
+       gets fixed-width rendering with no JSX changes. */
+    font-variant-numeric: tabular-nums;
+    font-kerning: normal;
   }
 
   h1 { @apply text-[32px] font-bold tracking-tight leading-none; }

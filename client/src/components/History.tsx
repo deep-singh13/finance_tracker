@@ -150,7 +150,7 @@ export function History() {
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[16px] font-semibold text-foreground tracking-tight">
+                          <span className="text-[16px] font-bold text-foreground tracking-tight">
                             {formatAmount(expense.amount)}
                           </span>
                           <button
