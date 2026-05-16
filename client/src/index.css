@@ -248,6 +248,25 @@
   }
 }
 
+/* ── Privacy toggle: blur-reveal ── */
+@keyframes blur-reveal {
+  from { filter: blur(10px); opacity: 0; transform: scale(0.97); }
+  to   { filter: blur(0); opacity: 1; transform: scale(1); }
+}
+.blur-reveal {
+  animation: blur-reveal 220ms var(--ease-out) forwards;
+}
+
+/* ── Delete row exit ── */
+@keyframes row-exit {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(14px); }
+}
+.row-exiting {
+  animation: row-exit 260ms var(--ease-out) forwards;
+  pointer-events: none;
+}
+
 /* ── prefers-reduced-motion — remove position animations, keep opacity ── */
 @media (prefers-reduced-motion: reduce) {
   .stagger-item {

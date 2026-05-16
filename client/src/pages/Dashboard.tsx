@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { format, isToday, parseISO, startOfWeek, isAfter, isSameMonth, subWeeks, subMonths, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
 import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail } from "lucide-react";
 import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
@@ -13,6 +13,41 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
 import type { Subscription, Investment } from "@shared/schema";
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/** Counts up from 0 to target on first mount. Subsequent target changes snap. */
+function useCountUp(target: number, duration = 680) {
+  const [value, setValue] = useState(0);
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    if (target === 0) { setValue(0); return; }
+    if (hasAnimated.current) { setValue(target); return; }
+
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReduced) { setValue(target); hasAnimated.current = true; return; }
+
+    hasAnimated.current = true;
+    const start = performance.now();
+
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t); // ease-out-expo
+      setValue(Math.round(target * eased));
+      if (t < 1) requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  }, [target, duration]);
+
+  return value;
+}
 
 function ordinal(n: number) {
   const s = ["th", "st", "nd", "rd"];
@@ -139,6 +174,8 @@ export default function Dashboard() {
   const fmt = (cents: number) =>
     (cents / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const displayedTotal = useCountUp(monthTotal);
+
   const budget = budgetData?.amount || 0;
   const remaining = budget - monthTotal;
   const budgetProgress = budget > 0 ? Math.min((monthTotal / budget) * 100, 100) : 0;
@@ -168,7 +205,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <p className="section-label text-blue-200/70 mb-1">{format(new Date(), "MMMM yyyy")}</p>
-              <h1 className="text-2xl font-bold text-white tracking-tight">Overview</h1>
+              <h1 className="text-2xl font-bold text-white tracking-tight">{getGreeting()}</h1>
             </div>
             <div className="flex items-center gap-2">
               {/* Privacy toggle */}
@@ -214,8 +251,11 @@ export default function Dashboard() {
             <p className="text-[13px] font-medium text-blue-200/70 mb-1 uppercase tracking-widest">Spent This Month</p>
             <div className="flex items-baseline gap-2">
               {!isPrivate && <span className="text-[13px] font-medium text-white/60">₹</span>}
-              <span className="text-[48px] font-bold text-white leading-none tracking-tight">
-                {mask(fmt(monthTotal))}
+              <span
+                key={isPrivate ? "private" : "public"}
+                className="blur-reveal text-[48px] font-bold text-white leading-none tracking-tight"
+              >
+                {isPrivate ? "••••••" : fmt(displayedTotal)}
               </span>
             </div>
             {!isPrivate && monthVsLastPct !== null && (

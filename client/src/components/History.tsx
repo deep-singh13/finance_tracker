@@ -13,6 +13,7 @@ export function History() {
   const deleteExpense = useDeleteExpense();
   const [searchQuery, setSearchQuery] = useState("");
   const [editingExpense, setEditingExpense] = useState<ExpenseResponse | null>(null);
+  const [deletingIds, setDeletingIds] = useState<Set<number>>(new Set());
 
   const filteredExpenses = useMemo(() => {
     if (!expenses) return [];
@@ -36,7 +37,9 @@ export function History() {
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation(); // don't open edit modal
-    deleteExpense.mutate(id);
+    setDeletingIds(prev => new Set(prev).add(id));
+    // let the exit animation finish before the row leaves the DOM
+    setTimeout(() => deleteExpense.mutate(id), 270);
   };
 
   if (isLoading) {
@@ -113,7 +116,7 @@ export function History() {
                   .map((expense) => (
                     <div
                       key={expense.id}
-                      className="ios-list-item group cursor-pointer"
+                      className={`ios-list-item group cursor-pointer${deletingIds.has(expense.id) ? " row-exiting" : ""}`}
                       onClick={() => setEditingExpense(expense)}
                     >
                       <CategoryIcon category={expense.category} size="md" />

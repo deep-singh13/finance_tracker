@@ -132,6 +132,17 @@ function AuthGuard() {
 }
 
 function App() {
+  useEffect(() => {
+    console.log(
+      "%c₹ Finance Tracker",
+      "font-size: 18px; font-weight: 700; color: #1D4ED8; font-family: 'IBM Plex Sans', system-ui, sans-serif;"
+    );
+    console.log(
+      "%cSelf-hosted. Private. Every rupee accounted for.",
+      "color: #6b7280; font-size: 12px; font-family: 'IBM Plex Sans', system-ui, sans-serif;"
+    );
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="spending-app-theme">
