@@ -312,7 +312,12 @@ export default function Dashboard() {
           <div className="space-y-4">
             {/* Net Cash Flow */}
             {monthlyIncomeTotal > 0 && (
-              <div className="bg-card rounded-2xl border border-border/50 shadow-sm overflow-hidden">
+              <div className={cn(
+                "rounded-2xl border shadow-sm overflow-hidden",
+                netCashFlow >= 0
+                  ? "bg-emerald-500/[0.05] border-emerald-500/25 dark:bg-emerald-500/[0.07] dark:border-emerald-500/20"
+                  : "bg-red-500/[0.05] border-red-500/25 dark:bg-red-500/[0.07] dark:border-red-500/20"
+              )}>
                 <div className="px-5 py-4 border-b border-border/40">
                   <p className="section-label">Net Cash Flow — {format(new Date(), "MMMM")}</p>
                 </div>

@@ -205,9 +205,12 @@
     @apply bg-card rounded-2xl overflow-hidden shadow-sm shadow-black/5 border border-border/50;
   }
 
-  /* Only hover on pointer devices — prevents touch false positives */
+  /* Only hover on pointer devices — prevents touch false positives.
+     --row-tint can be set per-row to apply a category or semantic surface tint;
+     falls back to the card surface so rows without a tint look normal. */
   .ios-list-item {
-    @apply flex items-center justify-between px-4 py-3 bg-card cursor-pointer;
+    @apply flex items-center justify-between px-4 py-3 cursor-pointer;
+    background-color: var(--row-tint, hsl(var(--card)));
     transition: background-color 150ms var(--ease-out), transform 120ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {

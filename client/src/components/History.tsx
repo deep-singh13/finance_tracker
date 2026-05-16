@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { format, parseISO, startOfMonth, isSameMonth, eachMonthOfInterval } from "date-fns";
 import { type ExpenseResponse } from "@shared/routes";
 import { CategoryIcon } from "./CategoryIcon";
@@ -7,6 +7,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ExpenseModal } from "./ExpenseModal";
 import { Input } from "@/components/ui/input";
 import { Search, Trash2 } from "lucide-react";
+
+/** Per-category surface tints for ios-list rows. Applied via --row-tint CSS custom property
+ *  so the hover state can override cleanly. Opacity is intentionally sub-threshold: you
+ *  can't name the color, but after 20 rows you scan by category without looking at the icon. */
+const CATEGORY_TINTS: Record<string, string> = {
+  Food:          "rgba(249,115,22,0.05)",
+  Entertainment: "rgba(168,85,247,0.05)",
+  Amenities:     "rgba(59,130,246,0.04)",
+  Miscellaneous: "rgba(113,113,122,0.04)",
+};
 
 export function History() {
   const { data: expenses, isLoading } = useExpenses();
@@ -117,6 +127,7 @@ export function History() {
                     <div
                       key={expense.id}
                       className={`ios-list-item group cursor-pointer${deletingIds.has(expense.id) ? " row-exiting" : ""}`}
+                      style={{ '--row-tint': CATEGORY_TINTS[expense.category] } as React.CSSProperties}
                       onClick={() => setEditingExpense(expense)}
                     >
                       <CategoryIcon category={expense.category} size="md" />
