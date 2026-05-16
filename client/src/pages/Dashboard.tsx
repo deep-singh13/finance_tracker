@@ -289,7 +289,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <main className="px-4 md:px-8 max-w-2xl md:max-w-none mx-auto pb-8 mt-4">
+      <main className="px-4 md:px-8 max-w-2xl md:max-w-none mx-auto pb-8 mt-6">
         {/* ── Budget alert — full width ─────────────────────────────── */}
         {budget > 0 && budgetPct >= 80 && (
           <div className={cn(
@@ -306,10 +306,10 @@ export default function Dashboard() {
         )}
 
         {/* ── Desktop: 2-col grid · Mobile: single column ───────────── */}
-        <div className="space-y-4 md:grid md:grid-cols-2 md:gap-4 md:space-y-0 md:items-start">
+        <div className="space-y-5 md:grid md:grid-cols-2 md:gap-6 md:space-y-0 md:items-start">
 
           {/* ── Left column ─────────────────────────────────────────── */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Net Cash Flow */}
             {monthlyIncomeTotal > 0 && (
               <div className={cn(
@@ -318,10 +318,10 @@ export default function Dashboard() {
                   ? "bg-emerald-500/[0.05] border-emerald-500/25 dark:bg-emerald-500/[0.07] dark:border-emerald-500/20"
                   : "bg-red-500/[0.05] border-red-500/25 dark:bg-red-500/[0.07] dark:border-red-500/20"
               )}>
-                <div className="px-5 py-4 border-b border-border/40">
+                <div className="px-5 pt-4 pb-3 border-b border-border/40">
                   <p className="section-label">Net Cash Flow — {format(new Date(), "MMMM")}</p>
                 </div>
-                <div className="px-5 py-4 flex items-center justify-between">
+                <div className="px-5 py-5 flex items-center justify-between">
                   <div>
                     <div className="flex items-baseline gap-1">
                       {!isPrivate && <span className="text-[14px] text-muted-foreground">₹</span>}
@@ -379,7 +379,7 @@ export default function Dashboard() {
                   </span>
                 )}
               </div>
-              <div className="px-5 py-4 space-y-4">
+              <div className="px-5 py-5 space-y-4">
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
@@ -436,7 +436,7 @@ export default function Dashboard() {
             {/* Upcoming subscriptions */}
             {upcomingSubscriptions.length > 0 && (
               <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-                <div className="px-5 py-4 border-b border-border/40 flex items-center gap-2">
+                <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center gap-2">
                   <CalendarClock className="w-4 h-4 text-primary" />
                   <p className="section-label">Upcoming This Month</p>
                 </div>
@@ -462,12 +462,12 @@ export default function Dashboard() {
           </div>
 
           {/* ── Right column ─────────────────────────────────────────── */}
-          <div className="space-y-4">
+          <div className="space-y-5">
             {categoryData.length > 0 && (
               <>
                 {/* Category breakdown */}
                 <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-                  <div className="px-5 py-4 border-b border-border/40">
+                  <div className="px-5 pt-4 pb-3 border-b border-border/40">
                     <p className="section-label">Category Breakdown — {format(new Date(), "MMMM")}</p>
                   </div>
                   <div className="px-2 py-4 h-[260px]">
@@ -497,7 +497,7 @@ export default function Dashboard() {
 
                 {/* Monthly insights */}
                 <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-                  <div className="px-5 py-4 border-b border-border/40">
+                  <div className="px-5 pt-4 pb-3 border-b border-border/40">
                     <p className="section-label">Monthly Insights</p>
                   </div>
                   <div className="divide-y divide-border/40">
@@ -526,7 +526,7 @@ export default function Dashboard() {
 
                 {/* Spending trends */}
                 <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-                  <div className="px-5 py-4 border-b border-border/40">
+                  <div className="px-5 pt-4 pb-3 border-b border-border/40">
                     <p className="section-label">Spending Trends</p>
                   </div>
                   <div className="px-4 py-5 space-y-8">

@@ -111,12 +111,12 @@ export function History() {
 
           return (
             <div key={monthDate.toISOString()} className="mb-8 stagger-item">
-              <div className="flex justify-between items-baseline px-2 mb-2">
+              <div className="flex justify-between items-baseline px-2 mb-3">
                 <h3 className="text-lg font-bold text-foreground">
                   {format(monthDate, "MMMM yyyy")}
                 </h3>
-                <span className="text-[13px] font-semibold text-muted-foreground uppercase tracking-wider">
-                  Total: {formatAmount(monthTotal)}
+                <span className="text-[13px] font-semibold text-foreground/65 tabular-nums uppercase tracking-wider">
+                  {formatAmount(monthTotal)}
                 </span>
               </div>
 
