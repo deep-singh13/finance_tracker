@@ -164,7 +164,8 @@ export function GmailSyncModal({ open, onClose }: Props) {
           {state !== "committing" && state !== "done" && (
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted transition-colors shrink-0"
+              className="icon-btn w-8 h-8 rounded-full hover:bg-muted shrink-0 cursor-pointer"
+              style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
             >
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
@@ -415,11 +416,13 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
         {/* Actions */}
         <div className="flex gap-2 pt-1">
           <button onClick={cancelEdit}
-            className="flex-1 py-2 rounded-xl bg-muted text-[13px] font-medium text-muted-foreground hover:bg-muted/70 transition-colors">
+            className="flex-1 py-2 rounded-xl bg-muted text-[13px] font-medium text-muted-foreground active:scale-[0.97] cursor-pointer"
+            style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}>
             Cancel
           </button>
           <button onClick={() => saveEdit(tx.tempId)}
-            className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold transition-colors">
+            className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold active:scale-[0.97] cursor-pointer"
+            style={{ transition: "opacity 150ms var(--ease-out), transform 120ms var(--ease-out)" }}>
             Save
           </button>
         </div>
@@ -460,11 +463,13 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
       </span>
       <div className="flex items-center gap-0.5 shrink-0 ml-1">
         <button onClick={() => startEdit(tx)}
-          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-muted transition-colors">
+          className="icon-btn w-8 h-8 hover:bg-muted cursor-pointer"
+          style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}>
           <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
         </button>
         <button onClick={() => handleDelete(tx.tempId)}
-          className="w-8 h-8 flex items-center justify-center rounded-xl hover:bg-destructive/10 transition-colors">
+          className="icon-btn w-8 h-8 hover:bg-destructive/10 cursor-pointer"
+          style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}>
           <Trash2 className="w-3.5 h-3.5 text-destructive" />
         </button>
       </div>

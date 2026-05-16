@@ -174,7 +174,10 @@ export default function Dashboard() {
               {/* Privacy toggle */}
               <button
                 onClick={() => setIsPrivate(p => !p)}
-                className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 text-white rounded-xl border border-white/20 transition-all duration-200 cursor-pointer"
+                className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
+                style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.25)"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.15)"}
                 aria-label={isPrivate ? "Show balances" : "Hide balances"}
               >
                 {isPrivate ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -182,7 +185,10 @@ export default function Dashboard() {
               {/* Gmail sync */}
               <button
                 onClick={() => setGmailOpen(true)}
-                className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 text-white rounded-xl border border-white/20 transition-all duration-200 cursor-pointer"
+                className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
+                style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.25)"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.15)"}
                 aria-label="Sync Gmail"
               >
                 <Mail className="w-4 h-4" />
@@ -190,7 +196,10 @@ export default function Dashboard() {
               <ThemeToggle />
               <ExpenseModal>
                 <button
-                  className="w-9 h-9 flex items-center justify-center bg-white/15 hover:bg-white/25 text-white rounded-xl border border-white/20 transition-all duration-200 cursor-pointer"
+                  className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
+                style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.25)"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.15)"}
                   aria-label="Add expense"
                 >
                   <Plus className="w-4 h-4" />
@@ -344,12 +353,15 @@ export default function Dashboard() {
                       <div className="h-2.5 bg-muted rounded-full overflow-hidden">
                         <div
                           className={cn(
-                            "h-full rounded-full transition-all duration-700",
+                            "h-full rounded-full",
                             budgetPct >= 100 ? "bg-red-500"
                               : budgetPct >= 80 ? "bg-amber-500"
                               : "bg-primary"
                           )}
-                          style={{ width: `${budgetProgress}%` }}
+                          style={{
+                            width: `${budgetProgress}%`,
+                            transition: "width 500ms var(--ease-out), background-color 300ms var(--ease-out)",
+                          }}
                         />
                       </div>
                       <div className="flex justify-between text-[12px] text-muted-foreground">
@@ -523,7 +535,8 @@ export default function Dashboard() {
         <ExpenseModal>
           <button
             type="button"
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200 font-semibold text-[15px] cursor-pointer"
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-5 py-4 rounded-full shadow-lg shadow-primary/30 font-semibold text-[15px] cursor-pointer active:scale-[0.97]"
+            style={{ transition: "transform 150ms var(--ease-out), opacity 150ms var(--ease-out)" }}
           >
             <Plus className="w-5 h-5" /> Add Expense
           </button>

@@ -97,7 +97,7 @@ export function History() {
           const monthTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
 
           return (
-            <div key={monthDate.toISOString()} className="mb-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div key={monthDate.toISOString()} className="mb-8 stagger-item">
               <div className="flex justify-between items-baseline px-2 mb-2">
                 <h3 className="text-lg font-bold text-foreground">
                   {format(monthDate, "MMMM yyyy")}
@@ -142,7 +142,8 @@ export function History() {
                           <button
                             onClick={(e) => handleDelete(e, expense.id)}
                             disabled={deleteExpense.isPending}
-                            className="w-8 h-8 flex items-center justify-center rounded-xl opacity-0 group-hover:opacity-100 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all duration-150 cursor-pointer shrink-0"
+                            className="icon-btn w-8 h-8 opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
+                            style={{ transition: "opacity 150ms var(--ease-out), background-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
                             aria-label="Delete expense"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

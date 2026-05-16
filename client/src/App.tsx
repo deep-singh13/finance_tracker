@@ -48,18 +48,21 @@ function TabBar() {
         const active = location === href;
         return (
           <Link key={href} href={href}>
-            <a className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer transition-all duration-200 group"
+            <a className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer group select-none"
+               style={{ WebkitTapHighlightColor: "transparent" }}
                aria-label={label}>
-              <span className={`w-9 h-9 flex items-center justify-center rounded-xl transition-all duration-200 ${
+              <span className={`w-9 h-9 flex items-center justify-center rounded-xl icon-btn ${
                 active
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/30"
-                  : "text-muted-foreground group-hover:text-foreground group-hover:bg-muted/60"
-              }`}>
+                  ? "bg-primary text-primary-foreground shadow-md shadow-primary/25"
+                  : "text-muted-foreground"
+              }`}
+              style={{ transition: "background-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}>
                 <Icon className="w-[18px] h-[18px]" />
               </span>
-              <span className={`text-[9.5px] font-semibold tracking-wide transition-colors duration-200 ${
+              <span className={`text-[9.5px] font-semibold tracking-wide ${
                 active ? "text-primary" : "text-muted-foreground"
-              }`}>
+              }`}
+              style={{ transition: "color 150ms var(--ease-out)" }}>
                 {label}
               </span>
             </a>
@@ -68,13 +71,16 @@ function TabBar() {
       })}
       <button
         onClick={logout}
-        className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer transition-all duration-200 group"
+        className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer group select-none"
+        style={{ WebkitTapHighlightColor: "transparent" }}
         aria-label="Lock / Logout"
       >
-        <span className="w-9 h-9 flex items-center justify-center rounded-xl text-muted-foreground group-hover:text-destructive group-hover:bg-destructive/10 transition-all duration-200">
+        <span className="icon-btn w-9 h-9 text-muted-foreground"
+          style={{ transition: "background-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}>
           <LogOut className="w-[18px] h-[18px]" />
         </span>
-        <span className="text-[9.5px] font-semibold tracking-wide text-muted-foreground group-hover:text-destructive transition-colors duration-200">
+        <span className="text-[9.5px] font-semibold tracking-wide text-muted-foreground"
+          style={{ transition: "color 150ms var(--ease-out)" }}>
           Lock
         </span>
       </button>
