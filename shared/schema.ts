@@ -38,6 +38,7 @@ export const investments = pgTable("investments", {
   startDate: date("start_date"),
   notes: text("notes"),
   isActive: boolean("is_active").default(true).notNull(),
+  skippedMonths: text("skipped_months").array().default([]), // YYYY-MM months where SIP is skipped
   createdAt: timestamp("created_at").defaultNow(),
 });
 

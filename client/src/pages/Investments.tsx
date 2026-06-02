@@ -21,6 +21,9 @@ const TYPE_COLORS: Record<string, string> = {
 const fmt = (paise: number) =>
   (paise / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
+const currentMonthStr = format(new Date(), "yyyy-MM");
+const currentMonthShort = format(new Date(), "MMM");
+
 // Estimate total invested for SIPs based on months since start
 function estimatedTotal(inv: Investment): number {
   if (inv.type !== "SIP" || !inv.startDate) return inv.amount;
@@ -151,8 +154,31 @@ export default function Investments() {
     },
   });
 
+  const skipMutation = useMutation({
+    mutationFn: async ({ inv, skip }: { inv: Investment; skip: boolean }) => {
+      const current = inv.skippedMonths ?? [];
+      const skippedMonths = skip
+        ? [...current, currentMonthStr]
+        : current.filter(m => m !== currentMonthStr);
+      const res = await fetch(`/api/investments/${inv.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skippedMonths }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: (_data, { skip }) => {
+      qc.invalidateQueries({ queryKey: ["/api/investments"] });
+      toast({ title: skip ? `Skipped for ${currentMonthShort}` : `Included for ${currentMonthShort}` });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const activeSIPs = investments.filter(i => i.type === "SIP" && i.isActive);
-  const monthlySIP = activeSIPs.reduce((s, i) => s + i.amount, 0);
+  const activeUnskippedSIPs = activeSIPs.filter(i => !(i.skippedMonths ?? []).includes(currentMonthStr));
+  const monthlySIP = activeUnskippedSIPs.reduce((s, i) => s + i.amount, 0);
+  const skippedThisMonth = activeSIPs.filter(i => (i.skippedMonths ?? []).includes(currentMonthStr));
   const totalEstimated = investments.reduce((s, i) => s + estimatedTotal(i), 0);
 
   return (
@@ -179,12 +205,19 @@ export default function Investments() {
         {/* Summary cards */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Monthly SIPs</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              {currentMonthShort} SIPs
+            </span>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-lg text-muted-foreground">₹</span>
               <span className="text-2xl font-bold">{(monthlySIP / 100).toLocaleString("en-IN")}</span>
             </div>
-            <p className="text-[11px] text-muted-foreground mt-1">{activeSIPs.length} active SIP{activeSIPs.length !== 1 ? "s" : ""}</p>
+            <p className="text-[11px] text-muted-foreground mt-1">
+              {activeUnskippedSIPs.length} active
+              {skippedThisMonth.length > 0 && (
+                <span className="text-amber-600 dark:text-amber-400"> · {skippedThisMonth.length} skipped</span>
+              )}
+            </p>
           </div>
           <div className="bg-card rounded-2xl p-5 border border-border/50 shadow-sm">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Est. Total Invested</span>
@@ -213,49 +246,78 @@ export default function Investments() {
           </div>
         ) : (
           <div className="ios-list">
-            {investments.map(inv => (
-              <div key={inv.id} className="ios-list-item group">
-                <div className="flex flex-col justify-center flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[16px] font-medium truncate">{inv.name}</span>
-                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${TYPE_COLORS[inv.type] ?? TYPE_COLORS.Other}`}>
-                      {inv.type}
-                    </span>
-                    {!inv.isActive && (
-                      <span className="text-[11px] text-muted-foreground px-2 py-0.5 rounded-full bg-muted shrink-0">Inactive</span>
+            {investments.map(inv => {
+              const isSkipped = inv.type === "SIP" && inv.isActive && (inv.skippedMonths ?? []).includes(currentMonthStr);
+              const isPending = skipMutation.isPending && (skipMutation.variables as any)?.inv?.id === inv.id;
+
+              return (
+                <div key={inv.id} className="ios-list-item group">
+                  <div className="flex flex-col justify-center flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[16px] font-medium truncate ${isSkipped ? "text-muted-foreground" : ""}`}>
+                        {inv.name}
+                      </span>
+                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${TYPE_COLORS[inv.type] ?? TYPE_COLORS.Other}`}>
+                        {inv.type}
+                      </span>
+                      {!inv.isActive && (
+                        <span className="text-[11px] text-muted-foreground px-2 py-0.5 rounded-full bg-muted shrink-0">Inactive</span>
+                      )}
+                      {isSkipped && (
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/12 text-amber-600 dark:text-amber-400 shrink-0">
+                          Skipped {currentMonthShort}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span className={`text-[13px] ${isSkipped ? "text-muted-foreground/50 line-through" : "text-muted-foreground"}`}>
+                        {fmt(inv.amount)}{inv.type === "SIP" ? "/mo" : ""}
+                      </span>
+                      {inv.startDate && (
+                        <span className="text-[12px] text-muted-foreground">
+                          Since {format(parseISO(inv.startDate), "MMM yyyy")}
+                        </span>
+                      )}
+                      {inv.type === "SIP" && inv.startDate && (
+                        <span className="text-[12px] text-muted-foreground">
+                          · Est. {fmt(estimatedTotal(inv))} total
+                        </span>
+                      )}
+                    </div>
+                    {inv.notes && (
+                      <p className="text-[12px] text-muted-foreground mt-0.5 truncate">{inv.notes}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-[13px] text-muted-foreground">
-                      {fmt(inv.amount)}{inv.type === "SIP" ? "/mo" : ""}
-                    </span>
-                    {inv.startDate && (
-                      <span className="text-[12px] text-muted-foreground">
-                        Since {format(parseISO(inv.startDate), "MMM yyyy")}
-                      </span>
+                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {/* Skip toggle — always visible for active SIPs */}
+                    {inv.type === "SIP" && inv.isActive && (
+                      <button
+                        onClick={() => skipMutation.mutate({ inv, skip: !isSkipped })}
+                        disabled={isPending}
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors duration-150 shrink-0
+                          ${isSkipped
+                            ? "bg-amber-500/12 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20"
+                            : "border-border text-muted-foreground hover:border-amber-500/40 hover:text-amber-600 dark:hover:text-amber-400"
+                          } ${isPending ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        {isSkipped ? `Unskip` : `Skip ${currentMonthShort}`}
+                      </button>
                     )}
-                    {inv.type === "SIP" && inv.startDate && (
-                      <span className="text-[12px] text-muted-foreground">
-                        · Est. {fmt(estimatedTotal(inv))} total
-                      </span>
-                    )}
+                    {/* Edit/delete — hover only */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setModal(inv)}
+                        className="p-2 text-muted-foreground hover:bg-muted/20 rounded-full">
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => deleteMutation.mutate(inv.id)}
+                        className="p-2 text-destructive hover:bg-destructive/10 rounded-full">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  {inv.notes && (
-                    <p className="text-[12px] text-muted-foreground mt-0.5 truncate">{inv.notes}</p>
-                  )}
                 </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                  <button onClick={() => setModal(inv)}
-                    className="p-2 text-muted-foreground hover:bg-muted/20 rounded-full">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => deleteMutation.mutate(inv.id)}
-                    className="p-2 text-destructive hover:bg-destructive/10 rounded-full">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
