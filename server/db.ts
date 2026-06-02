@@ -13,11 +13,11 @@ if (!process.env.DATABASE_URL) {
   process.exit(1); // safer exit than throwing immediately
 }
 
-// Create Postgres pool with Neon-compatible SSL
+// Neon uses a CA-signed TLS cert; rejectUnauthorized: true prevents MITM attacks.
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: {
-    rejectUnauthorized: false,
+    rejectUnauthorized: true,
   },
 });
 

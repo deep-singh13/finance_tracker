@@ -59,8 +59,11 @@ export async function registerRoutes(
   // SYNC_API_KEY env var is optional; if set, the skill must send it as
   // X-Sync-Key header. These are intentionally outside the requireAuth wall.
 
-  // GET /api/gmail/status — returns last sync timestamp (used by skill + dashboard)
-  app.get("/api/gmail/status", async (_req, res) => {
+  // GET /api/gmail/status — used by both the dashboard (session) and the sync skill (X-Sync-Key).
+  // Allow if either auth is valid; block only when neither is present.
+  app.get("/api/gmail/status", async (req, res) => {
+    const hasSession = (req.session as any).authenticated;
+    if (!hasSession && !checkSyncKey(req, res)) return;
     const record = await storage.getGmailSync();
     res.json({ lastSyncedAt: record?.lastSyncedAt ?? null });
   });
@@ -182,12 +185,25 @@ export async function registerRoutes(
   app.put("/api/gmail/staged/:tempId", (req, res) => {
     const idx = staged.findIndex(t => t.tempId === req.params.tempId);
     if (idx === -1) return res.status(404).json({ message: "Not found" });
-    const { amount, description, category, date, incomeSource } = req.body;
-    if (amount !== undefined) staged[idx].amount = amount;
-    if (description !== undefined) staged[idx].description = description;
-    if (category !== undefined) staged[idx].category = category;
-    if (date !== undefined) staged[idx].date = date;
-    if (incomeSource !== undefined) staged[idx].incomeSource = incomeSource;
+    const stagedEditSchema = z.object({
+      amount: z.number().positive().optional(),
+      description: z.string().min(1).optional(),
+      category: z.string().min(1).optional(),
+      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+      incomeSource: z.enum(["salary", "freelance", "investment", "other"]).optional(),
+    });
+    let parsed: z.infer<typeof stagedEditSchema>;
+    try {
+      parsed = stagedEditSchema.parse(req.body);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+    if (parsed.amount !== undefined) staged[idx].amount = parsed.amount;
+    if (parsed.description !== undefined) staged[idx].description = parsed.description;
+    if (parsed.category !== undefined) staged[idx].category = parsed.category;
+    if (parsed.date !== undefined) staged[idx].date = parsed.date;
+    if (parsed.incomeSource !== undefined) staged[idx].incomeSource = parsed.incomeSource;
     res.json(staged[idx]);
   });
 
