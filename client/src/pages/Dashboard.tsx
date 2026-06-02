@@ -150,7 +150,7 @@ export default function Dashboard() {
       .reduce((sum, i) => sum + i.amount, 0);
 
     const sipTotal = (investments ?? [])
-      .filter(inv => inv.type === "SIP" && inv.isActive)
+      .filter(inv => inv.type === "SIP" && inv.isActive && !(inv.skippedMonths ?? []).includes(currentMonthStr))
       .reduce((sum, inv) => sum + inv.amount, 0);
 
     return {

@@ -283,6 +283,7 @@ export async function registerRoutes(
         startDate: z.string().optional().nullable(),
         notes: z.string().optional().nullable(),
         isActive: z.boolean().optional(),
+        skippedMonths: z.array(z.string()).optional(),
       });
       const data = schema.parse(req.body);
       if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
