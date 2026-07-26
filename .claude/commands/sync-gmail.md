@@ -15,17 +15,33 @@ Call `GET $FINANCE_TRACKER_URL/api/gmail/status`. Parse `lastSyncedAt` from the 
 - If null, default to `newer_than:90d`.
 
 ### 3 — Search Gmail for transaction emails
-Use the Gmail MCP `search_threads` tool with this query (adjust the `after:` date from step 2):
+Use the Gmail MCP `search_threads` tool with **two separate queries** (adjust the `after:` date from step 2):
 
+**Query A — debits & UPI:**
 ```
 from:alerts@hdfcbank.bank.in (debited OR "UPI txn") $AFTER_CLAUSE
 ```
 
-Fetch up to 50 threads. Collect all messages across all threads.
+**Query B — ATM / cash withdrawals** (different email format, not caught by query A):
+```
+from:alerts@hdfcbank.bank.in "ATM withdrawal" $AFTER_CLAUSE
+```
+
+Run both queries. Deduplicate by thread ID. Call `get_thread` on every unique thread (HDFC bundles alerts into mega-threads; `search_threads` silently truncates them). Fetch up to 50 threads per query.
 
 ### 4 — Parse each message into a transaction
 
-For every message, extract from its **snippet** (no need to call `get_thread`):
+For every message, determine its type first, then extract fields.
+
+**Detect ATM withdrawal** — snippet contains `ATM withdrawal` or `for ATM`:
+- **Amount** — match `Rs <digits>` (space after Rs, not dot) or `Rs.<digits>`, strip commas, multiply by 100 → paise
+  - `Rs 10000.00` → 1000000 paise
+- **Description** — always `"Cash Withdrawal"`
+- **Category** — always `Miscellaneous`
+- **Date** — message `date` field → `YYYY-MM-DD`
+- **externalId** — message `id`
+
+**All other debits** — extract from snippet:
 
 **Amount** — match `Rs.<digits>` or `INR <digits>` (strip commas, multiply by 100 to get paise):
 - `Rs.353.58` → 35358 paise
@@ -53,7 +69,7 @@ Use these keyword rules (case-insensitive on the merchant name):
 **externalId** — use the message's `id` field from the search result.
 
 **Skip** a message if:
-- Amount cannot be parsed (no Rs./INR pattern found)
+- Amount cannot be parsed (no Rs./INR amount found)
 - The snippet contains `credited` but NOT `debited` (refunds/incoming, skip these)
 - Subject contains `OTP` (one-time password emails, not transactions)
 
