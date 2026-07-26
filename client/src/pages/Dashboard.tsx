@@ -55,13 +55,16 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
+// Amount actually counted toward totals: the transaction amount minus anything received back in a split.
+const netAmount = (e: ExpenseResponse) => e.amount - (e.splitAmount || 0);
+
 function calculateMonthlyInsights(expenses: ExpenseResponse[]) {
   const now = new Date();
   const monthExpenses = expenses.filter(e => isSameMonth(parseISO(e.date), now));
-  const total = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const total = monthExpenses.reduce((sum, e) => sum + netAmount(e), 0);
   const categories: Record<string, number> = {};
   monthExpenses.forEach(e => {
-    categories[e.category] = (categories[e.category] || 0) + e.amount;
+    categories[e.category] = (categories[e.category] || 0) + netAmount(e);
   });
   const topCat = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
   const daysInMonth = now.getDate();
@@ -77,7 +80,7 @@ function calculateWeeklyTotals(expenses: ExpenseResponse[]) {
   const last7Days = eachDayOfInterval({ start: subWeeks(now, 6), end: now });
   return last7Days.map(day => {
     const dayStr = format(day, "yyyy-MM-dd");
-    const total = expenses.filter(e => e.date === dayStr).reduce((sum, e) => sum + e.amount, 0);
+    const total = expenses.filter(e => e.date === dayStr).reduce((sum, e) => sum + netAmount(e), 0);
     return { name: format(day, "EEE"), total: total / 100 };
   });
 }
@@ -87,7 +90,7 @@ function calculateMonthlyTotals(expenses: ExpenseResponse[]) {
   const last6Months = eachMonthOfInterval({ start: subMonths(now, 5), end: now });
   return last6Months.map(m => {
     const mStr = format(m, "yyyy-MM");
-    const total = expenses.filter(e => e.date.startsWith(mStr)).reduce((sum, e) => sum + e.amount, 0);
+    const total = expenses.filter(e => e.date.startsWith(mStr)).reduce((sum, e) => sum + netAmount(e), 0);
     return { name: format(m, "MMM"), total: total / 100 };
   });
 }
@@ -121,14 +124,14 @@ export default function Dashboard() {
   const setBudgetMutation = useSetBudget();
   const [newBudget, setNewBudget] = useState("");
 
-  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
+  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, monthlySplitTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
     if (!expenses) return {
       todayTotal: 0, weekTotal: 0, monthTotal: 0, lastMonthTotal: 0,
-      monthlyIncomeTotal: 0, monthlySIPTotal: 0,
+      monthlyIncomeTotal: 0, monthlySIPTotal: 0, monthlySplitTotal: 0,
       categoryData: [], monthlyInsights: null, weeklyTrend: [], monthlyTrend: []
     };
 
-    let today = 0, week = 0, month = 0, lastMonth = 0;
+    let today = 0, week = 0, month = 0, lastMonth = 0, split = 0;
     const allCategories: Record<string, number> = {};
     const now = new Date();
     const startOfCurrentWeek = startOfWeek(now, { weekStartsOn: 1 });
@@ -136,13 +139,15 @@ export default function Dashboard() {
 
     expenses.forEach(exp => {
       const expDate = parseISO(exp.date);
-      if (isToday(expDate)) today += exp.amount;
-      if (isAfter(expDate, startOfCurrentWeek) || expDate.getTime() === startOfCurrentWeek.getTime()) week += exp.amount;
+      const net = netAmount(exp);
+      if (isToday(expDate)) today += net;
+      if (isAfter(expDate, startOfCurrentWeek) || expDate.getTime() === startOfCurrentWeek.getTime()) week += net;
       if (isSameMonth(expDate, now)) {
-        month += exp.amount;
-        allCategories[exp.category] = (allCategories[exp.category] || 0) + exp.amount;
+        month += net;
+        split += exp.splitAmount || 0;
+        allCategories[exp.category] = (allCategories[exp.category] || 0) + net;
       }
-      if (exp.date.startsWith(lastMonthStr)) lastMonth += exp.amount;
+      if (exp.date.startsWith(lastMonthStr)) lastMonth += net;
     });
 
     const monthlyInc = (incomeList ?? [])
@@ -155,7 +160,7 @@ export default function Dashboard() {
 
     return {
       todayTotal: today, weekTotal: week, monthTotal: month, lastMonthTotal: lastMonth,
-      monthlyIncomeTotal: monthlyInc, monthlySIPTotal: sipTotal,
+      monthlyIncomeTotal: monthlyInc, monthlySIPTotal: sipTotal, monthlySplitTotal: split,
       categoryData: Object.entries(allCategories).map(([name, value]) => ({ name, value: value / 100 })),
       monthlyInsights: calculateMonthlyInsights(expenses),
       weeklyTrend: calculateWeeklyTotals(expenses),
@@ -230,7 +235,7 @@ export default function Dashboard() {
               >
                 <Mail className="w-4 h-4" />
               </button>
-              <ThemeToggle />
+              <ThemeToggle variant="hero" />
               <ExpenseModal>
                 <button
                   className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
@@ -354,6 +359,12 @@ export default function Dashboard() {
                       <div className="flex items-center justify-end gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                         Investments <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthlySIPTotal)}`}</span>
+                      </div>
+                    )}
+                    {monthlySplitTotal > 0 && (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                        Split Received <span className="font-semibold text-cyan-600 dark:text-cyan-400">{isPrivate ? "••••••" : `+₹${fmt(monthlySplitTotal)}`}</span>
                       </div>
                     )}
                   </div>

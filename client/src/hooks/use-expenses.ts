@@ -22,6 +22,7 @@ export interface UIExpenseInput {
   category: string;
   date: string;
   tags?: string[];
+  splitAmount?: string;
 }
 
 // Create expense
@@ -38,10 +39,13 @@ export function useCreateExpense() {
         throw new Error("Please enter a valid amount");
       }
 
+      const splitAmountInCents = uiData.splitAmount ? Math.round(parseFloat(uiData.splitAmount) * 100) : 0;
+
       const payload = {
         ...uiData,
         amount: amountInCents,
         tags: uiData.tags ?? [],
+        splitAmount: isNaN(splitAmountInCents) ? 0 : splitAmountInCents,
       };
 
       const validated = api.expenses.create.input.parse(payload);
@@ -85,7 +89,8 @@ export function useUpdateExpense() {
   return useMutation({
     mutationFn: async ({ id, uiData }: { id: number; uiData: UIExpenseInput }) => {
       const amountInCents = Math.round(parseFloat(uiData.amount) * 100);
-      const payload = { ...uiData, amount: amountInCents };
+      const splitAmountInCents = uiData.splitAmount ? Math.round(parseFloat(uiData.splitAmount) * 100) : 0;
+      const payload = { ...uiData, amount: amountInCents, splitAmount: isNaN(splitAmountInCents) ? 0 : splitAmountInCents };
       const validated = api.expenses.update.input.parse(payload);
       
       const url = buildUrl(api.expenses.update.path, { id });
@@ -103,6 +108,37 @@ export function useUpdateExpense() {
       queryClient.invalidateQueries({ queryKey: [api.expenses.list.path] });
       toast({ title: "Updated successfully" });
     },
+  });
+}
+
+// Update just the split-received amount on an expense (paise), without touching other fields
+export function useUpdateExpenseSplit() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, splitAmount }: { id: number; splitAmount: number }) => {
+      const url = buildUrl(api.expenses.update.path, { id });
+      const res = await fetch(url, {
+        method: api.expenses.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ splitAmount }),
+        credentials: "include",
+      });
+
+      if (!res.ok) throw new Error("Failed to update split amount");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.expenses.list.path] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Could not update the split amount.",
+        variant: "destructive",
+      });
+    }
   });
 }
 

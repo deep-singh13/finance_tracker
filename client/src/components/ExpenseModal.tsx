@@ -27,6 +27,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [splitAmount, setSplitAmount] = useState("");
 
   const createMutation = useCreateExpense();
   const updateMutation = useUpdateExpense();
@@ -39,6 +40,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
       setDate(expense.date);
       setTags(expense.tags ?? []);
       setTagInput("");
+      setSplitAmount(expense.splitAmount ? (expense.splitAmount / 100).toString() : "");
     } else if (!expense && open) {
       setAmount("");
       setDescription("");
@@ -46,6 +48,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
       setDate(format(new Date(), "yyyy-MM-dd"));
       setTags([]);
       setTagInput("");
+      setSplitAmount("");
     }
   }, [expense, open]);
 
@@ -63,7 +66,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
     e.preventDefault();
     if (!amount || !description) return;
 
-    const uiData = { amount, description, category, date, tags };
+    const uiData = { amount, description, category, date, tags, splitAmount };
 
     if (expense) {
       updateMutation.mutate(
@@ -82,6 +85,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
             setDate(format(new Date(), "yyyy-MM-dd"));
             setTags([]);
             setTagInput("");
+            setSplitAmount("");
           }
         }
       );
@@ -151,6 +155,21 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
                 onChange={(e) => setDate(e.target.value)}
                 className="flex-1 bg-transparent text-[15px] focus:outline-none text-foreground"
                 required
+              />
+            </div>
+
+            <div className="flex items-center px-4 py-3">
+              <label className="w-24 text-[15px] font-medium text-foreground">Split</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                placeholder="0.00 received back"
+                value={splitAmount}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) setSplitAmount(val);
+                }}
+                className="flex-1 bg-transparent text-[15px] focus:outline-none text-foreground placeholder:text-muted-foreground"
               />
             </div>
           </div>

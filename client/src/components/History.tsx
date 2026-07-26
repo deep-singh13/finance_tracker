@@ -1,12 +1,102 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { format, parseISO, startOfMonth, isSameMonth, eachMonthOfInterval } from "date-fns";
 import { type ExpenseResponse } from "@shared/routes";
 import { CategoryIcon } from "./CategoryIcon";
-import { useExpenses, useDeleteExpense } from "@/hooks/use-expenses";
+import { useExpenses, useDeleteExpense, useUpdateExpenseSplit } from "@/hooks/use-expenses";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ExpenseModal } from "./ExpenseModal";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, Trash2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const formatAmount = (cents: number) =>
+  (cents / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+
+const netAmount = (e: ExpenseResponse) => e.amount - (e.splitAmount || 0);
+
+/** Pill showing/editing how much of this expense was received back from a split.
+ *  Muted outline when unset, colored with the amount once a split is recorded. */
+function SplitPill({ expense }: { expense: ExpenseResponse }) {
+  const updateSplit = useUpdateExpenseSplit();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState("");
+  const hasSplit = expense.splitAmount > 0;
+
+  useEffect(() => {
+    setValue(hasSplit ? (expense.splitAmount / 100).toString() : "");
+  }, [expense.splitAmount, hasSplit]);
+
+  const commit = (cents: number) => {
+    updateSplit.mutate({ id: expense.id, splitAmount: cents }, { onSuccess: () => setOpen(false) });
+  };
+
+  const handleSave = () => {
+    const parsed = parseFloat(value);
+    commit(isNaN(parsed) || parsed < 0 ? 0 : Math.round(parsed * 100));
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className={cn(
+            "text-[11px] font-medium px-2 py-0.5 rounded-full",
+            hasSplit
+              ? "bg-cyan-500/10 text-cyan-600 dark:text-cyan-400"
+              : "bg-muted text-muted-foreground border border-border/60 hover:text-foreground"
+          )}
+          style={{ transition: "background-color 150ms var(--ease-out), color 150ms var(--ease-out)" }}
+        >
+          {hasSplit ? `Split · ${formatAmount(expense.splitAmount)}` : "Split"}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        className="w-60 rounded-2xl p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-[12px] font-semibold text-muted-foreground mb-2">Amount received back</p>
+        <div className="flex items-center gap-2">
+          <span className="text-[14px] text-muted-foreground">₹</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            autoFocus
+            placeholder="0.00"
+            value={value}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === "" || /^\d*\.?\d{0,2}$/.test(val)) setValue(val);
+            }}
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+            className="flex-1 bg-muted rounded-xl px-3 py-1.5 text-[14px] focus:outline-none focus:ring-2 focus:ring-cyan-500/50 text-foreground"
+          />
+        </div>
+        <div className="flex gap-2 mt-3">
+          {hasSplit && (
+            <button
+              type="button"
+              onClick={() => commit(0)}
+              className="flex-1 py-1.5 rounded-xl bg-muted text-[12px] font-medium text-muted-foreground cursor-pointer"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={updateSplit.isPending}
+            className="flex-1 py-1.5 rounded-xl bg-cyan-500 text-white text-[12px] font-semibold cursor-pointer"
+          >
+            Save
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 /** Per-category surface tints for ios-list rows. Applied via --row-tint CSS custom property
  *  so the hover state can override cleanly. Opacity is intentionally sub-threshold: you
@@ -41,9 +131,6 @@ export function History() {
     return eachMonthOfInterval({ start: startOfMonth(minDate), end: startOfMonth(maxDate) })
       .sort((a, b) => b.getTime() - a.getTime());
   }, [filteredExpenses]);
-
-  const formatAmount = (cents: number) =>
-    (cents / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
 
   const handleDelete = (e: React.MouseEvent, id: number) => {
     e.stopPropagation(); // don't open edit modal
@@ -107,7 +194,7 @@ export function History() {
         {months.map((monthDate) => {
           const monthExpenses = filteredExpenses.filter(e => isSameMonth(parseISO(e.date), monthDate));
           if (monthExpenses.length === 0) return null;
-          const monthTotal = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+          const monthTotal = monthExpenses.reduce((sum, e) => sum + netAmount(e), 0);
 
           return (
             <div key={monthDate.toISOString()} className="mb-8 stagger-item">
@@ -146,6 +233,7 @@ export function History() {
                                 {tag}
                               </span>
                             ))}
+                            <SplitPill expense={expense} />
                           </div>
                         </div>
 

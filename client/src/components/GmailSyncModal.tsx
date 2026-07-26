@@ -22,6 +22,7 @@ interface StagedTx {
   externalId: string;
   type: "debit" | "credit";
   incomeSource: "salary" | "freelance" | "investment" | "other";
+  splitAmount: number;
 }
 
 type ModalState = "waiting" | "reviewing" | "committing" | "done";
@@ -84,6 +85,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
       category: tx.category,
       date: tx.date,
       incomeSource: tx.incomeSource,
+      splitAmount: tx.splitAmount,
     });
   };
 
@@ -351,6 +353,21 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
             className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
+        {/* Split received (debits only) */}
+        {!isCredit && (
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] text-muted-foreground w-24 shrink-0">Split (₹)</span>
+            <input
+              type="number" step="0.01"
+              value={((editForm.splitAmount ?? tx.splitAmount ?? 0) / 100).toFixed(2)}
+              onChange={e => {
+                const parsed = parseFloat(e.target.value);
+                setEditForm(f => ({ ...f, splitAmount: isNaN(parsed) ? 0 : Math.round(parsed * 100) }));
+              }}
+              className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+            />
+          </div>
+        )}
         {/* Description */}
         <div className="flex items-center gap-3">
           <span className="text-[12px] text-muted-foreground w-24 shrink-0">Description</span>
@@ -454,6 +471,11 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
             ? INCOME_SOURCES.find(s => s.value === tx.incomeSource)?.label ?? "Other"
             : tx.category}
         </p>
+        {!isCredit && tx.splitAmount > 0 && (
+          <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+            Split · {fmt(tx.splitAmount)} back
+          </span>
+        )}
       </div>
       <span className={cn(
         "text-[14px] font-semibold shrink-0",

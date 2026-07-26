@@ -14,6 +14,7 @@ const parsedTransactionSchema = z.object({
   externalId: z.string().min(1),       // Gmail message ID for deduplication
   type: z.enum(["debit", "credit"]).default("debit"),
   incomeSource: z.enum(["salary", "freelance", "investment", "other"]).default("other"), // for credits
+  splitAmount: z.number().min(0).default(0), // in paise; amount received back (debits only)
 });
 
 const syncPayloadSchema = z.object({
@@ -30,6 +31,7 @@ interface StagedTransaction {
   externalId: string;
   type: "debit" | "credit";
   incomeSource: "salary" | "freelance" | "investment" | "other"; // used for credits
+  splitAmount: number;     // in paise; amount received back (debits only)
 }
 let staged: StagedTransaction[] = [];
 
@@ -84,6 +86,7 @@ export async function registerRoutes(
           date: tx.date,
           source: "gmail",
           externalId: tx.externalId,
+          splitAmount: tx.splitAmount,
         });
         imported++;
       }
@@ -191,6 +194,7 @@ export async function registerRoutes(
       category: z.string().min(1).optional(),
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       incomeSource: z.enum(["salary", "freelance", "investment", "other"]).optional(),
+      splitAmount: z.number().min(0).optional(),
     });
     let parsed: z.infer<typeof stagedEditSchema>;
     try {
@@ -204,6 +208,7 @@ export async function registerRoutes(
     if (parsed.category !== undefined) staged[idx].category = parsed.category;
     if (parsed.date !== undefined) staged[idx].date = parsed.date;
     if (parsed.incomeSource !== undefined) staged[idx].incomeSource = parsed.incomeSource;
+    if (parsed.splitAmount !== undefined) staged[idx].splitAmount = parsed.splitAmount;
     res.json(staged[idx]);
   });
 
@@ -241,6 +246,7 @@ export async function registerRoutes(
             date: tx.date,
             source: "gmail",
             externalId: tx.externalId,
+            splitAmount: tx.splitAmount,
           });
           imported++;
         }

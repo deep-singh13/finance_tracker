@@ -11,6 +11,7 @@ export const expenses = pgTable("expenses", {
   source: text("source").default("manual").notNull(), // 'manual' | 'gmail' | 'subscription'
   externalId: text("external_id"), // Gmail message ID for deduplication
   tags: text("tags").array(), // free-form tags e.g. ['#vacation', '#tax-deductible']
+  splitAmount: integer("split_amount").default(0).notNull(), // Cents received back from someone else for this expense; subtracted before counting toward totals
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -64,6 +65,7 @@ export const gmailSync = pgTable("gmail_sync", {
 
 export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true }).extend({
   tags: z.array(z.string()).optional().nullable(),
+  splitAmount: z.coerce.number().min(0).optional(),
 });
 export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true });
 export const insertGmailSyncSchema = createInsertSchema(gmailSync).omit({ id: true });
