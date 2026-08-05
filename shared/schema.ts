@@ -43,6 +43,20 @@ export const investments = pgTable("investments", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const emis = pgTable("emis", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  lender: text("lender"),
+  amount: integer("amount").notNull(), // monthly instalment, in paise
+  totalAmount: integer("total_amount"), // optional loan principal, in paise
+  tenureMonths: integer("tenure_months").notNull(),
+  startDate: date("start_date").notNull(), // month of the first instalment
+  dueDay: integer("due_day").default(1).notNull(), // day of month the instalment is debited
+  notes: text("notes"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -70,6 +84,7 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true,
 export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true });
 export const insertGmailSyncSchema = createInsertSchema(gmailSync).omit({ id: true });
 export const insertInvestmentSchema = createInsertSchema(investments).omit({ id: true, createdAt: true });
+export const insertEmiSchema = createInsertSchema(emis).omit({ id: true, createdAt: true });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
 export const insertIncomeSchema = createInsertSchema(income).omit({ id: true, createdAt: true });
 
@@ -81,6 +96,8 @@ export type GmailSync = typeof gmailSync.$inferSelect;
 export type InsertGmailSync = z.infer<typeof insertGmailSyncSchema>;
 export type Investment = typeof investments.$inferSelect;
 export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
+export type Emi = typeof emis.$inferSelect;
+export type InsertEmi = z.infer<typeof insertEmiSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
 export type Income = typeof income.$inferSelect;

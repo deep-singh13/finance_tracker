@@ -8,12 +8,13 @@ import { ThemeProvider } from "@/components/theme-provider";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Investments from "@/pages/Investments";
+import Emis from "@/pages/Emis";
 import Subscriptions from "@/pages/Subscriptions";
 import Income from "@/pages/Income";
 import Login from "@/pages/Login";
 import { History } from "@/components/History";
 import { useAuth, useLogout } from "@/hooks/use-auth";
-import { LayoutDashboard, History as HistoryIcon, TrendingUp, RefreshCw, Wallet, LogOut } from "lucide-react";
+import { LayoutDashboard, History as HistoryIcon, TrendingUp, RefreshCw, Wallet, Landmark, LogOut } from "lucide-react";
 
 // Runs on every app load — creates expenses for active subscriptions whose
 // billing day has passed this month and haven't been billed yet.
@@ -38,17 +39,18 @@ function TabBar() {
     { href: "/",              label: "Overview",      icon: LayoutDashboard },
     { href: "/income",        label: "Income",        icon: Wallet },
     { href: "/investments",   label: "Invest",        icon: TrendingUp },
+    { href: "/emis",          label: "EMIs",          icon: Landmark },
     { href: "/subscriptions", label: "Subs",          icon: RefreshCw },
     { href: "/history",       label: "History",       icon: HistoryIcon },
   ];
 
   return (
-    <nav className="tab-bar-glass fixed bottom-0 left-0 right-0 flex justify-around items-center px-2 py-2 pb-safe z-50">
+    <nav className="tab-bar-glass fixed bottom-0 left-0 right-0 flex justify-around items-center px-0.5 py-2 pb-safe z-50">
       {tabs.map(({ href, label, icon: Icon }) => {
         const active = location === href;
         return (
           <Link key={href} href={href}>
-            <a className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer group select-none"
+            <a className="flex flex-col items-center gap-1 px-1 py-2 min-w-[40px] rounded-xl cursor-pointer group select-none"
                style={{ WebkitTapHighlightColor: "transparent" }}
                aria-label={label}>
               <span className={`w-9 h-9 flex items-center justify-center rounded-xl icon-btn ${
@@ -71,7 +73,7 @@ function TabBar() {
       })}
       <button
         onClick={logout}
-        className="flex flex-col items-center gap-1 px-3 py-2 min-w-[52px] rounded-xl cursor-pointer group select-none"
+        className="flex flex-col items-center gap-1 px-1 py-2 min-w-[40px] rounded-xl cursor-pointer group select-none"
         style={{ WebkitTapHighlightColor: "transparent" }}
         aria-label="Lock / Logout"
       >
@@ -97,6 +99,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/income" component={Income} />
         <Route path="/investments" component={Investments} />
+        <Route path="/emis" component={Emis} />
         <Route path="/subscriptions" component={Subscriptions} />
         <Route path="/history" component={History} />
         <Route component={NotFound} />

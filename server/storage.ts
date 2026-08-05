@@ -4,6 +4,7 @@ import {
   budgets,
   gmailSync,
   investments,
+  emis,
   subscriptions,
   income,
   type CreateExpenseRequest,
@@ -15,6 +16,8 @@ import {
   type GmailSync,
   type Investment,
   type InsertInvestment,
+  type Emi,
+  type InsertEmi,
   type Subscription,
   type InsertSubscription,
   type Income,
@@ -39,6 +42,11 @@ export interface IStorage {
   createInvestment(data: InsertInvestment): Promise<Investment>;
   updateInvestment(id: number, data: Partial<InsertInvestment>): Promise<Investment>;
   deleteInvestment(id: number): Promise<void>;
+  // EMIs
+  getEmis(): Promise<Emi[]>;
+  createEmi(data: InsertEmi): Promise<Emi>;
+  updateEmi(id: number, data: Partial<InsertEmi>): Promise<Emi>;
+  deleteEmi(id: number): Promise<void>;
   // Subscriptions
   getSubscriptions(): Promise<Subscription[]>;
   createSubscription(data: InsertSubscription): Promise<Subscription>;
@@ -148,6 +156,26 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvestment(id: number): Promise<void> {
     await db.delete(investments).where(eq(investments.id, id));
+  }
+
+  // ── EMIs ───────────────────────────────────────────────────────────────────
+
+  async getEmis(): Promise<Emi[]> {
+    return await db.select().from(emis).orderBy(desc(emis.createdAt));
+  }
+
+  async createEmi(data: InsertEmi): Promise<Emi> {
+    const [row] = await db.insert(emis).values(data).returning();
+    return row;
+  }
+
+  async updateEmi(id: number, data: Partial<InsertEmi>): Promise<Emi> {
+    const [row] = await db.update(emis).set(data).where(eq(emis.id, id)).returning();
+    return row;
+  }
+
+  async deleteEmi(id: number): Promise<void> {
+    await db.delete(emis).where(eq(emis.id, id));
   }
 
   // ── Subscriptions ──────────────────────────────────────────────────────────

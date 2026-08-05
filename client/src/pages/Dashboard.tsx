@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { format, isToday, parseISO, startOfWeek, isAfter, isSameMonth, subWeeks, subMonths, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
+import { format, isToday, parseISO, startOfWeek, startOfMonth, isAfter, isSameMonth, subWeeks, subMonths, getDaysInMonth, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
 import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail } from "lucide-react";
 import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
@@ -7,12 +7,14 @@ import { useQuery } from "@tanstack/react-query";
 import { ExpenseModal } from "@/components/ExpenseModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GmailSyncModal } from "@/components/GmailSyncModal";
+import { MonthSwitcher } from "@/components/MonthSwitcher";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
-import type { Subscription, Investment } from "@shared/schema";
+import { emiTotalForMonth } from "@shared/emi";
+import type { Subscription, Investment, Emi } from "@shared/schema";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -58,20 +60,27 @@ function ordinal(n: number) {
 // Amount actually counted toward totals: the transaction amount minus anything received back in a split.
 const netAmount = (e: ExpenseResponse) => e.amount - (e.splitAmount || 0);
 
-function calculateMonthlyInsights(expenses: ExpenseResponse[]) {
+/**
+ * Insights for `month` (a YYYY-MM key). The daily average divides by days elapsed
+ * for the running month, but by the full month length for a month already past.
+ */
+function calculateMonthlyInsights(expenses: ExpenseResponse[], month: string) {
   const now = new Date();
-  const monthExpenses = expenses.filter(e => isSameMonth(parseISO(e.date), now));
+  const monthDate = parseISO(`${month}-01`);
+  const isCurrent = isSameMonth(monthDate, now);
+  const monthExpenses = expenses.filter(e => e.date.startsWith(month));
   const total = monthExpenses.reduce((sum, e) => sum + netAmount(e), 0);
   const categories: Record<string, number> = {};
   monthExpenses.forEach(e => {
     categories[e.category] = (categories[e.category] || 0) + netAmount(e);
   });
   const topCat = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
-  const daysInMonth = now.getDate();
+  const days = isCurrent ? now.getDate() : getDaysInMonth(monthDate);
   return {
     total,
+    count: monthExpenses.length,
     topCategory: topCat ? { name: topCat[0], amount: topCat[1] } : null,
-    dailyAvg: monthExpenses.length > 0 ? total / daysInMonth : 0
+    dailyAvg: monthExpenses.length > 0 ? total / days : 0
   };
 }
 
@@ -85,9 +94,9 @@ function calculateWeeklyTotals(expenses: ExpenseResponse[]) {
   });
 }
 
-function calculateMonthlyTotals(expenses: ExpenseResponse[]) {
-  const now = new Date();
-  const last6Months = eachMonthOfInterval({ start: subMonths(now, 5), end: now });
+/** Six-month bar series ending at (and including) `endMonth`. */
+function calculateMonthlyTotals(expenses: ExpenseResponse[], endMonth: Date) {
+  const last6Months = eachMonthOfInterval({ start: subMonths(endMonth, 5), end: endMonth });
   return last6Months.map(m => {
     const mStr = format(m, "yyyy-MM");
     const total = expenses.filter(e => e.date.startsWith(mStr)).reduce((sum, e) => sum + netAmount(e), 0);
@@ -118,63 +127,85 @@ export default function Dashboard() {
       return res.json();
     },
   });
+  const { data: emis } = useQuery<Emi[]>({
+    queryKey: ["/api/emis"],
+    queryFn: async () => {
+      const res = await fetch("/api/emis", { credentials: "include" });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return res.json();
+    },
+  });
 
-  const currentMonthStr = format(new Date(), "yyyy-MM");
-  const { data: budgetData } = useBudget(currentMonthStr);
+  // Every month-scoped figure on this page follows `selectedMonth`.
+  const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
+  const selectedMonthStr = format(selectedMonth, "yyyy-MM");
+  const isCurrentMonth = isSameMonth(selectedMonth, new Date());
+  const monthLabel = format(selectedMonth, "MMMM");
+
+  const { data: budgetData } = useBudget(selectedMonthStr);
   const setBudgetMutation = useSetBudget();
   const [newBudget, setNewBudget] = useState("");
 
-  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, monthlySplitTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
+  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, monthlyEmiTotal, monthlySplitTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
     if (!expenses) return {
       todayTotal: 0, weekTotal: 0, monthTotal: 0, lastMonthTotal: 0,
-      monthlyIncomeTotal: 0, monthlySIPTotal: 0, monthlySplitTotal: 0,
+      monthlyIncomeTotal: 0, monthlySIPTotal: 0, monthlyEmiTotal: 0, monthlySplitTotal: 0,
       categoryData: [], monthlyInsights: null, weeklyTrend: [], monthlyTrend: []
     };
 
     let today = 0, week = 0, month = 0, lastMonth = 0, split = 0;
     const allCategories: Record<string, number> = {};
     const now = new Date();
+    // Today/week stay anchored to the real today — they're only shown on the current month.
     const startOfCurrentWeek = startOfWeek(now, { weekStartsOn: 1 });
-    const lastMonthStr = format(subMonths(now, 1), "yyyy-MM");
+    const prevMonthStr = format(subMonths(selectedMonth, 1), "yyyy-MM");
 
     expenses.forEach(exp => {
       const expDate = parseISO(exp.date);
       const net = netAmount(exp);
       if (isToday(expDate)) today += net;
       if (isAfter(expDate, startOfCurrentWeek) || expDate.getTime() === startOfCurrentWeek.getTime()) week += net;
-      if (isSameMonth(expDate, now)) {
+      if (exp.date.startsWith(selectedMonthStr)) {
         month += net;
         split += exp.splitAmount || 0;
         allCategories[exp.category] = (allCategories[exp.category] || 0) + net;
       }
-      if (exp.date.startsWith(lastMonthStr)) lastMonth += net;
+      if (exp.date.startsWith(prevMonthStr)) lastMonth += net;
     });
 
     const monthlyInc = (incomeList ?? [])
-      .filter(i => i.date.startsWith(currentMonthStr))
+      .filter(i => i.date.startsWith(selectedMonthStr))
       .reduce((sum, i) => sum + i.amount, 0);
 
+    // A SIP only counts from its start month onward — otherwise it would appear
+    // in months predating the investment.
     const sipTotal = (investments ?? [])
-      .filter(inv => inv.type === "SIP" && inv.isActive && !(inv.skippedMonths ?? []).includes(currentMonthStr))
+      .filter(inv =>
+        inv.type === "SIP" &&
+        inv.isActive &&
+        !(inv.skippedMonths ?? []).includes(selectedMonthStr) &&
+        (!inv.startDate || inv.startDate.slice(0, 7) <= selectedMonthStr)
+      )
       .reduce((sum, inv) => sum + inv.amount, 0);
 
     return {
       todayTotal: today, weekTotal: week, monthTotal: month, lastMonthTotal: lastMonth,
-      monthlyIncomeTotal: monthlyInc, monthlySIPTotal: sipTotal, monthlySplitTotal: split,
+      monthlyIncomeTotal: monthlyInc, monthlySIPTotal: sipTotal,
+      monthlyEmiTotal: emiTotalForMonth(emis, selectedMonthStr), monthlySplitTotal: split,
       categoryData: Object.entries(allCategories).map(([name, value]) => ({ name, value: value / 100 })),
-      monthlyInsights: calculateMonthlyInsights(expenses),
+      monthlyInsights: calculateMonthlyInsights(expenses, selectedMonthStr),
       weeklyTrend: calculateWeeklyTotals(expenses),
-      monthlyTrend: calculateMonthlyTotals(expenses),
+      monthlyTrend: calculateMonthlyTotals(expenses, selectedMonth),
     };
-  }, [expenses, incomeList, investments, currentMonthStr]);
+  }, [expenses, incomeList, investments, emis, selectedMonth, selectedMonthStr]);
 
   const upcomingSubscriptions = useMemo(() => {
     if (!subscriptions) return [];
     const todayDay = new Date().getDate();
     return subscriptions.filter(s =>
-      s.isActive && s.lastBilledMonth !== currentMonthStr && s.billingDay > todayDay
+      s.isActive && s.lastBilledMonth !== selectedMonthStr && s.billingDay > todayDay
     );
-  }, [subscriptions, currentMonthStr]);
+  }, [subscriptions, selectedMonthStr]);
 
   const fmt = (cents: number) =>
     (cents / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -186,12 +217,12 @@ export default function Dashboard() {
   const budgetProgress = budget > 0 ? Math.min((monthTotal / budget) * 100, 100) : 0;
   const budgetPct = budget > 0 ? (monthTotal / budget) * 100 : 0;
   const monthVsLastPct = lastMonthTotal > 0 ? ((monthTotal - lastMonthTotal) / lastMonthTotal) * 100 : null;
-  // Net cash flow includes investments as outflow; budget only tracks expenses
-  const netCashFlow = monthlyIncomeTotal - monthTotal - monthlySIPTotal;
+  // Net cash flow counts investments and EMIs as outflow; budget only tracks expenses
+  const netCashFlow = monthlyIncomeTotal - monthTotal - monthlySIPTotal - monthlyEmiTotal;
 
   const handleSetBudget = () => {
     const amount = parseFloat(newBudget);
-    if (!isNaN(amount)) { setBudgetMutation.mutate({ month: currentMonthStr, amount }); setNewBudget(""); }
+    if (!isNaN(amount)) { setBudgetMutation.mutate({ month: selectedMonthStr, amount }); setNewBudget(""); }
   };
 
   // Privacy mask — replaces any amount string with ••••••
@@ -206,10 +237,15 @@ export default function Dashboard() {
         <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-indigo-600/20 blur-2xl pointer-events-none" />
 
         <div className="max-w-2xl mx-auto md:max-w-none relative">
+          {/* Month switcher gets its own row — with the "Today" pill visible it
+              would otherwise push the icon row off-screen on narrow phones. */}
+          <div className="mb-3">
+            <MonthSwitcher month={selectedMonth} onChange={setSelectedMonth} />
+          </div>
+
           {/* Header row */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <p className="section-label text-blue-200/70 mb-1">{format(new Date(), "MMMM yyyy")}</p>
               <h1 className="text-2xl font-bold text-white tracking-tight">{getGreeting()}</h1>
             </div>
             <div className="flex items-center gap-2">
@@ -253,7 +289,9 @@ export default function Dashboard() {
 
           {/* Big number */}
           <div className="mb-6">
-            <p className="text-[13px] font-medium text-blue-200/70 mb-1 uppercase tracking-widest">Spent This Month</p>
+            <p className="text-[13px] font-medium text-blue-200/70 mb-1 uppercase tracking-widest">
+              {isCurrentMonth ? "Spent This Month" : `Spent in ${monthLabel}`}
+            </p>
             <div className="flex items-baseline gap-2">
               {!isPrivate && <span className="text-[13px] font-medium text-white/60">₹</span>}
               <span
@@ -280,16 +318,31 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Quick stats row */}
+          {/* Quick stats row — today/week are only meaningful on the current month */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
-              <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Today</p>
-              <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(todayTotal)}`}</p>
-            </div>
-            <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
-              <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">This Week</p>
-              <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(weekTotal)}`}</p>
-            </div>
+            {isCurrentMonth ? (
+              <>
+                <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
+                  <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Today</p>
+                  <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(todayTotal)}`}</p>
+                </div>
+                <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
+                  <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">This Week</p>
+                  <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(weekTotal)}`}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
+                  <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Daily Avg</p>
+                  <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(monthlyInsights?.dailyAvg || 0)}`}</p>
+                </div>
+                <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
+                  <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Transactions</p>
+                  <p className="text-[20px] font-bold text-white">{monthlyInsights?.count ?? 0}</p>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -306,7 +359,7 @@ export default function Dashboard() {
             <AlertTriangle className="w-4 h-4 shrink-0" />
             {budgetPct >= 100
               ? `Over budget by ₹${fmt(monthTotal - budget)}`
-              : `${Math.round(budgetPct)}% of ${format(new Date(), "MMMM")} budget used`}
+              : `${Math.round(budgetPct)}% of ${monthLabel} budget used`}
           </div>
         )}
 
@@ -324,7 +377,7 @@ export default function Dashboard() {
                   : "bg-red-500/[0.05] border-red-500/25 dark:bg-red-500/[0.07] dark:border-red-500/20"
               )}>
                 <div className="px-5 pt-4 pb-3 border-b border-border/40">
-                  <p className="section-label">Net Cash Flow — {format(new Date(), "MMMM")}</p>
+                  <p className="section-label">Net Cash Flow — {monthLabel}</p>
                 </div>
                 <div className="px-5 py-5 flex items-center justify-between">
                   <div>
@@ -359,6 +412,12 @@ export default function Dashboard() {
                       <div className="flex items-center justify-end gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
                         Investments <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthlySIPTotal)}`}</span>
+                      </div>
+                    )}
+                    {monthlyEmiTotal > 0 && (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                        EMIs <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthlyEmiTotal)}`}</span>
                       </div>
                     )}
                     {monthlySplitTotal > 0 && (
@@ -444,8 +503,8 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Upcoming subscriptions */}
-            {upcomingSubscriptions.length > 0 && (
+            {/* Upcoming subscriptions — only relevant while viewing the running month */}
+            {isCurrentMonth && upcomingSubscriptions.length > 0 && (
               <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
                 <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center gap-2">
                   <CalendarClock className="w-4 h-4 text-primary" />
@@ -479,7 +538,7 @@ export default function Dashboard() {
                 {/* Category breakdown */}
                 <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
                   <div className="px-5 pt-4 pb-3 border-b border-border/40">
-                    <p className="section-label">Category Breakdown — {format(new Date(), "MMMM")}</p>
+                    <p className="section-label">Category Breakdown — {monthLabel}</p>
                   </div>
                   <div className="px-2 py-4 h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -509,7 +568,7 @@ export default function Dashboard() {
                 {/* Monthly insights */}
                 <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
                   <div className="px-5 pt-4 pb-3 border-b border-border/40">
-                    <p className="section-label">Monthly Insights</p>
+                    <p className="section-label">Monthly Insights — {monthLabel}</p>
                   </div>
                   <div className="divide-y divide-border/40">
                     {[
@@ -541,6 +600,8 @@ export default function Dashboard() {
                     <p className="section-label">Spending Trends</p>
                   </div>
                   <div className="px-4 py-5 space-y-8">
+                    {/* Last 7 days is relative to today, so it only makes sense on the current month */}
+                    {isCurrentMonth && (
                     <div>
                       <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 7 days</p>
                       <div className="h-[180px]">
@@ -559,8 +620,11 @@ export default function Dashboard() {
                         </ResponsiveContainer>
                       </div>
                     </div>
+                    )}
                     <div>
-                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Last 6 months</p>
+                      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                        6 months to {format(selectedMonth, "MMM yyyy")}
+                      </p>
                       <div className="h-[180px]">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={monthlyTrend} barSize={22}>

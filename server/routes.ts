@@ -305,6 +305,64 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  // ── EMIs ────────────────────────────────────────────────────────────────────
+  app.get("/api/emis", async (_req, res) => {
+    res.json(await storage.getEmis());
+  });
+
+  app.post("/api/emis", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1),
+        lender: z.string().optional().nullable(),
+        amount: z.coerce.number().positive(),
+        totalAmount: z.coerce.number().positive().optional().nullable(),
+        tenureMonths: z.coerce.number().int().min(1).max(600),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        dueDay: z.coerce.number().int().min(1).max(28).default(1),
+        notes: z.string().optional().nullable(),
+        isActive: z.boolean().default(true),
+      });
+      const data = schema.parse(req.body);
+      res.status(201).json(await storage.createEmi({
+        ...data,
+        amount: Math.round(data.amount * 100),
+        totalAmount: data.totalAmount != null ? Math.round(data.totalAmount * 100) : null,
+      }));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/emis/:id", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1).optional(),
+        lender: z.string().optional().nullable(),
+        amount: z.coerce.number().positive().optional(),
+        totalAmount: z.coerce.number().positive().optional().nullable(),
+        tenureMonths: z.coerce.number().int().min(1).max(600).optional(),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        dueDay: z.coerce.number().int().min(1).max(28).optional(),
+        notes: z.string().optional().nullable(),
+        isActive: z.boolean().optional(),
+      });
+      const data = schema.parse(req.body);
+      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
+      if (data.totalAmount != null) data.totalAmount = Math.round(data.totalAmount * 100);
+      res.json(await storage.updateEmi(Number(req.params.id), data));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.delete("/api/emis/:id", async (req, res) => {
+    await storage.deleteEmi(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // ── Subscriptions ───────────────────────────────────────────────────────────
   app.get("/api/subscriptions", async (_req, res) => {
     res.json(await storage.getSubscriptions());
