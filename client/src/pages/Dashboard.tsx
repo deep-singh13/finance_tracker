@@ -9,6 +9,7 @@ import { ExpenseModal } from "@/components/ExpenseModal";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GmailSyncModal } from "@/components/GmailSyncModal";
 import { MonthSwitcher } from "@/components/MonthSwitcher";
+import Aurora from "@/components/Aurora";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,22 @@ function useCountUp(target: number, duration = 680) {
   }, [target, duration]);
 
   return value;
+}
+
+/**
+ * The aurora is a continuously animating WebGL canvas. Skip it when the user
+ * asked for reduced motion, or when WebGL2 isn't available — the hero then
+ * falls back to the original static gradient. Evaluated once, since neither
+ * answer changes within a session.
+ */
+function canRenderAurora(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  try {
+    return !!document.createElement("canvas").getContext("webgl2");
+  } catch {
+    return false;
+  }
 }
 
 function ordinal(n: number) {
@@ -110,6 +127,7 @@ const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#0
 export default function Dashboard() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(false);
+  const [auroraEnabled] = useState(canRenderAurora);
   const logout = useLogout();
   const { data: expenses } = useExpenses();
   const { data: incomeList } = useIncome();
@@ -233,10 +251,23 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {/* ── Hero card ─────────────────────────────────────────────── */}
-      <div className="hero-gradient px-5 pt-14 pb-8 relative overflow-hidden">
-        {/* Decorative orbs */}
-        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-indigo-600/20 blur-2xl pointer-events-none" />
+      <div className={cn(
+        "px-5 pt-14 pb-8 relative overflow-hidden",
+        // Falls back to the original static gradient when the animated canvas
+        // is unavailable or unwanted, so the hero never renders bare.
+        auroraEnabled ? "hero-aurora" : "hero-gradient"
+      )}>
+        {auroraEnabled ? (
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+            <Aurora colorStops={["#000000", "#B497CF", "#5227FF"]} blend={0.5} amplitude={1.0} speed={0.5} />
+          </div>
+        ) : (
+          <>
+            {/* Decorative orbs — the static-gradient counterpart to the aurora */}
+            <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-blue-500/20 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-indigo-600/20 blur-2xl pointer-events-none" />
+          </>
+        )}
 
         <div className="max-w-2xl mx-auto md:max-w-none relative">
           {/* Month switcher gets its own row — with the "Today" pill visible it

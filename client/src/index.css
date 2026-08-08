@@ -183,6 +183,14 @@
     background: linear-gradient(135deg, #060B14 0%, #0F172A 50%, #1E3A8A 100%);
   }
 
+  /* Base layer behind the <Aurora /> canvas, which renders transparent.
+     Deliberately dark in both themes — the hero's text and chips are white.
+     Used instead of .hero-gradient so the aurora reads against near-black
+     rather than competing with a blue gradient. */
+  .hero-aurora {
+    background: linear-gradient(135deg, #05070E 0%, #0A0F1C 55%, #0E1526 100%);
+  }
+
   /* ── Gold shimmer text ── */
   .gold-text {
     background: linear-gradient(90deg, #EAA10A, #F5C842, #EAA10A);
