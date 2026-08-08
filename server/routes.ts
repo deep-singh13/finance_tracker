@@ -15,6 +15,7 @@ const parsedTransactionSchema = z.object({
   type: z.enum(["debit", "credit"]).default("debit"),
   incomeSource: z.enum(["salary", "freelance", "investment", "other"]).default("other"), // for credits
   splitAmount: z.number().min(0).default(0), // in paise; amount received back (debits only)
+  cardLast4: z.string().regex(/^\d{4}$/).optional(), // credit card that paid, matched to cards.last4
 });
 
 const syncPayloadSchema = z.object({
@@ -32,6 +33,7 @@ interface StagedTransaction {
   type: "debit" | "credit";
   incomeSource: "salary" | "freelance" | "investment" | "other"; // used for credits
   splitAmount: number;     // in paise; amount received back (debits only)
+  cardLast4?: string;      // resolved to cards.card_id at commit time
 }
 let staged: StagedTransaction[] = [];
 
@@ -79,6 +81,7 @@ export async function registerRoutes(
       for (const tx of transactions) {
         const exists = await storage.expenseExistsByExternalId(tx.externalId);
         if (exists) continue;
+        const card = tx.cardLast4 ? await storage.getCardByLast4(tx.cardLast4) : undefined;
         await storage.createExpense({
           amount: tx.amount,
           description: tx.description,
@@ -87,6 +90,7 @@ export async function registerRoutes(
           source: "gmail",
           externalId: tx.externalId,
           splitAmount: tx.splitAmount,
+          cardId: card?.id ?? null,
         });
         imported++;
       }
@@ -195,6 +199,7 @@ export async function registerRoutes(
       date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       incomeSource: z.enum(["salary", "freelance", "investment", "other"]).optional(),
       splitAmount: z.number().min(0).optional(),
+      cardLast4: z.string().regex(/^\d{4}$/).nullable().optional(),
     });
     let parsed: z.infer<typeof stagedEditSchema>;
     try {
@@ -209,6 +214,7 @@ export async function registerRoutes(
     if (parsed.date !== undefined) staged[idx].date = parsed.date;
     if (parsed.incomeSource !== undefined) staged[idx].incomeSource = parsed.incomeSource;
     if (parsed.splitAmount !== undefined) staged[idx].splitAmount = parsed.splitAmount;
+    if (parsed.cardLast4 !== undefined) staged[idx].cardLast4 = parsed.cardLast4 ?? undefined;
     res.json(staged[idx]);
   });
 
@@ -239,6 +245,8 @@ export async function registerRoutes(
       } else {
         const exists = await storage.expenseExistsByExternalId(tx.externalId);
         if (!exists) {
+          // Route to a credit card when the alert named one we know about.
+          const card = tx.cardLast4 ? await storage.getCardByLast4(tx.cardLast4) : undefined;
           await storage.createExpense({
             amount: tx.amount,
             description: tx.description,
@@ -247,6 +255,7 @@ export async function registerRoutes(
             source: "gmail",
             externalId: tx.externalId,
             splitAmount: tx.splitAmount,
+            cardId: card?.id ?? null,
           });
           imported++;
         }
@@ -302,6 +311,69 @@ export async function registerRoutes(
 
   app.delete("/api/investments/:id", async (req, res) => {
     await storage.deleteInvestment(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // ── Cards ───────────────────────────────────────────────────────────────────
+  app.get("/api/cards", async (_req, res) => {
+    res.json(await storage.getCards());
+  });
+
+  app.post("/api/cards", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1),
+        issuer: z.string().min(1),
+        network: z.string().optional().nullable(),
+        last4: z.string().regex(/^\d{4}$/, "Last 4 digits must be exactly 4 numbers"),
+        creditLimit: z.coerce.number().positive().optional().nullable(),
+        statementDay: z.coerce.number().int().min(1).max(28).default(1),
+        dueDay: z.coerce.number().int().min(1).max(28).default(20),
+        isActive: z.boolean().default(true),
+      });
+      const data = schema.parse(req.body);
+      const existing = await storage.getCardByLast4(data.last4);
+      if (existing) return res.status(400).json({ message: `A card ending ${data.last4} already exists` });
+      res.status(201).json(await storage.createCard({
+        ...data,
+        creditLimit: data.creditLimit != null ? Math.round(data.creditLimit * 100) : null,
+      }));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.put("/api/cards/:id", async (req, res) => {
+    try {
+      const schema = z.object({
+        name: z.string().min(1).optional(),
+        issuer: z.string().min(1).optional(),
+        network: z.string().optional().nullable(),
+        last4: z.string().regex(/^\d{4}$/).optional(),
+        creditLimit: z.coerce.number().positive().optional().nullable(),
+        statementDay: z.coerce.number().int().min(1).max(28).optional(),
+        dueDay: z.coerce.number().int().min(1).max(28).optional(),
+        isActive: z.boolean().optional(),
+        paidStatements: z.array(z.string().regex(/^\d{4}-\d{2}$/)).optional(),
+      });
+      const data = schema.parse(req.body);
+      if (data.last4) {
+        const existing = await storage.getCardByLast4(data.last4);
+        if (existing && existing.id !== Number(req.params.id)) {
+          return res.status(400).json({ message: `A card ending ${data.last4} already exists` });
+        }
+      }
+      if (data.creditLimit != null) data.creditLimit = Math.round(data.creditLimit * 100);
+      res.json(await storage.updateCard(Number(req.params.id), data));
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      throw err;
+    }
+  });
+
+  app.delete("/api/cards/:id", async (req, res) => {
+    await storage.deleteCard(Number(req.params.id));
     res.status(204).send();
   });
 

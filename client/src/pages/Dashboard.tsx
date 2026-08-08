@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { format, isToday, parseISO, startOfWeek, startOfMonth, isAfter, isSameMonth, subWeeks, subMonths, getDaysInMonth, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
-import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail } from "lucide-react";
+import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail, LogOut } from "lucide-react";
+import { useLogout } from "@/hooks/use-auth";
 import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
@@ -109,6 +110,7 @@ const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#0
 export default function Dashboard() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [gmailOpen, setGmailOpen] = useState(false);
+  const logout = useLogout();
   const { data: expenses } = useExpenses();
   const { data: incomeList } = useIncome();
   const { data: subscriptions } = useQuery<Subscription[]>({
@@ -248,7 +250,8 @@ export default function Dashboard() {
             <div>
               <h1 className="text-2xl font-bold text-white tracking-tight">{getGreeting()}</h1>
             </div>
-            <div className="flex items-center gap-2">
+            {/* gap-1.5 rather than gap-2 — five icons plus Lock only just fit at 320px */}
+            <div className="flex items-center gap-1.5 shrink-0">
               {/* Privacy toggle */}
               <button
                 onClick={() => setIsPrivate(p => !p)}
@@ -283,6 +286,17 @@ export default function Dashboard() {
                   <Plus className="w-4 h-4" />
                 </button>
               </ExpenseModal>
+              {/* Lock lives here rather than the tab bar — seven tabs already fill it */}
+              <button
+                onClick={logout}
+                className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
+                style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.25)"}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.15)"}
+                aria-label="Lock / Logout"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
             </div>
             <GmailSyncModal open={gmailOpen} onClose={() => setGmailOpen(false)} />
           </div>

@@ -12,6 +12,7 @@ export const expenses = pgTable("expenses", {
   externalId: text("external_id"), // Gmail message ID for deduplication
   tags: text("tags").array(), // free-form tags e.g. ['#vacation', '#tax-deductible']
   splitAmount: integer("split_amount").default(0).notNull(), // Cents received back from someone else for this expense; subtracted before counting toward totals
+  cardId: integer("card_id"), // Credit card that paid, if any. Null = bank account / cash.
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -40,6 +41,22 @@ export const investments = pgTable("investments", {
   notes: text("notes"),
   isActive: boolean("is_active").default(true).notNull(),
   skippedMonths: text("skipped_months").array().default([]), // YYYY-MM months where SIP is skipped
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const cards = pgTable("cards", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(), // "SimplySAVE"
+  issuer: text("issuer").notNull(), // "SBI Card"
+  network: text("network"), // 'VISA' | 'Mastercard' | 'RuPay' | 'Amex'
+  last4: text("last4").notNull().unique(), // Gmail sync routes a transaction to a card by this
+  creditLimit: integer("credit_limit"), // in paise
+  statementDay: integer("statement_day").default(1).notNull(), // day of month the bill is generated
+  dueDay: integer("due_day").default(20).notNull(), // day of month payment is due
+  // Statement period keys (YYYY-MM of the statement date) already paid off.
+  // Bill payments are skipped during sync, so this is how outstanding stays honest.
+  paidStatements: text("paid_statements").array().default([]),
+  isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -84,6 +101,7 @@ export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true,
 export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true });
 export const insertGmailSyncSchema = createInsertSchema(gmailSync).omit({ id: true });
 export const insertInvestmentSchema = createInsertSchema(investments).omit({ id: true, createdAt: true });
+export const insertCardSchema = createInsertSchema(cards).omit({ id: true, createdAt: true });
 export const insertEmiSchema = createInsertSchema(emis).omit({ id: true, createdAt: true });
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true });
 export const insertIncomeSchema = createInsertSchema(income).omit({ id: true, createdAt: true });
@@ -96,6 +114,8 @@ export type GmailSync = typeof gmailSync.$inferSelect;
 export type InsertGmailSync = z.infer<typeof insertGmailSyncSchema>;
 export type Investment = typeof investments.$inferSelect;
 export type InsertInvestment = z.infer<typeof insertInvestmentSchema>;
+export type Card = typeof cards.$inferSelect;
+export type InsertCard = z.infer<typeof insertCardSchema>;
 export type Emi = typeof emis.$inferSelect;
 export type InsertEmi = z.infer<typeof insertEmiSchema>;
 export type Subscription = typeof subscriptions.$inferSelect;

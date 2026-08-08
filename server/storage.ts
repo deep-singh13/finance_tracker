@@ -4,6 +4,7 @@ import {
   budgets,
   gmailSync,
   investments,
+  cards,
   emis,
   subscriptions,
   income,
@@ -16,6 +17,8 @@ import {
   type GmailSync,
   type Investment,
   type InsertInvestment,
+  type Card,
+  type InsertCard,
   type Emi,
   type InsertEmi,
   type Subscription,
@@ -42,6 +45,12 @@ export interface IStorage {
   createInvestment(data: InsertInvestment): Promise<Investment>;
   updateInvestment(id: number, data: Partial<InsertInvestment>): Promise<Investment>;
   deleteInvestment(id: number): Promise<void>;
+  // Cards
+  getCards(): Promise<Card[]>;
+  getCardByLast4(last4: string): Promise<Card | undefined>;
+  createCard(data: InsertCard): Promise<Card>;
+  updateCard(id: number, data: Partial<InsertCard>): Promise<Card>;
+  deleteCard(id: number): Promise<void>;
   // EMIs
   getEmis(): Promise<Emi[]>;
   createEmi(data: InsertEmi): Promise<Emi>;
@@ -156,6 +165,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteInvestment(id: number): Promise<void> {
     await db.delete(investments).where(eq(investments.id, id));
+  }
+
+  // ── Cards ──────────────────────────────────────────────────────────────────
+
+  async getCards(): Promise<Card[]> {
+    return await db.select().from(cards).orderBy(desc(cards.createdAt));
+  }
+
+  async getCardByLast4(last4: string): Promise<Card | undefined> {
+    const [row] = await db.select().from(cards).where(eq(cards.last4, last4)).limit(1);
+    return row;
+  }
+
+  async createCard(data: InsertCard): Promise<Card> {
+    const [row] = await db.insert(cards).values(data).returning();
+    return row;
+  }
+
+  async updateCard(id: number, data: Partial<InsertCard>): Promise<Card> {
+    const [row] = await db.update(cards).set(data).where(eq(cards.id, id)).returning();
+    return row;
+  }
+
+  async deleteCard(id: number): Promise<void> {
+    // Detach transactions rather than deleting them — the spend still happened.
+    await db.update(expenses).set({ cardId: null }).where(eq(expenses.cardId, id));
+    await db.delete(cards).where(eq(cards.id, id));
   }
 
   // ── EMIs ───────────────────────────────────────────────────────────────────
