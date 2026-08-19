@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Search, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatPaise, toPaiseOr, toRupees } from "@shared/paise";
+import { netAmount } from "@shared/month";
 
-const formatAmount = (cents: number) =>
-  (cents / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+const formatAmount = (paise: number) => formatPaise(paise);
 
-const netAmount = (e: ExpenseResponse) => e.amount - (e.splitAmount || 0);
 
 /** Pill showing/editing how much of this expense was received back from a split.
  *  Muted outline when unset, colored with the amount once a split is recorded. */
@@ -24,7 +24,7 @@ function SplitPill({ expense }: { expense: ExpenseResponse }) {
   const hasSplit = expense.splitAmount > 0;
 
   useEffect(() => {
-    setValue(hasSplit ? (expense.splitAmount / 100).toString() : "");
+    setValue(hasSplit ? String(toRupees(expense.splitAmount)) : "");
   }, [expense.splitAmount, hasSplit]);
 
   const commit = (cents: number) => {
@@ -32,8 +32,8 @@ function SplitPill({ expense }: { expense: ExpenseResponse }) {
   };
 
   const handleSave = () => {
-    const parsed = parseFloat(value);
-    commit(isNaN(parsed) || parsed < 0 ? 0 : Math.round(parsed * 100));
+    const paise = toPaiseOr(value, 0);
+    commit(paise < 0 ? 0 : paise);
   };
 
   return (

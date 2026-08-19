@@ -1,17 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import type { ExpensesListResponse } from "@shared/routes";
+import { throwIfResNotOk } from "@/lib/queryClient";
+import { toPaise, toPaiseOr } from "@shared/paise";
 import { useToast } from "@/hooks/use-toast";
 
 // Fetch all expenses
 export function useExpenses() {
-  return useQuery({
+  return useQuery<ExpensesListResponse>({
     queryKey: [api.expenses.list.path],
-    queryFn: async () => {
-      const res = await fetch(api.expenses.list.path, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch expenses");
-      const data = await res.json();
-      return api.expenses.list.responses[200].parse(data);
-    },
   });
 }
 
@@ -32,20 +29,16 @@ export function useCreateExpense() {
 
   return useMutation({
     mutationFn: async (uiData: UIExpenseInput) => {
-      // Convert dollar string to cents integer
-      const amountInCents = Math.round(parseFloat(uiData.amount) * 100);
-      
-      if (isNaN(amountInCents) || amountInCents <= 0) {
+      const amountInPaise = toPaiseOr(uiData.amount, 0);
+      if (amountInPaise <= 0) {
         throw new Error("Please enter a valid amount");
       }
 
-      const splitAmountInCents = uiData.splitAmount ? Math.round(parseFloat(uiData.splitAmount) * 100) : 0;
-
       const payload = {
         ...uiData,
-        amount: amountInCents,
+        amount: amountInPaise,
         tags: uiData.tags ?? [],
-        splitAmount: isNaN(splitAmountInCents) ? 0 : splitAmountInCents,
+        splitAmount: toPaiseOr(uiData.splitAmount, 0),
       };
 
       const validated = api.expenses.create.input.parse(payload);
@@ -88,9 +81,7 @@ export function useUpdateExpense() {
 
   return useMutation({
     mutationFn: async ({ id, uiData }: { id: number; uiData: UIExpenseInput }) => {
-      const amountInCents = Math.round(parseFloat(uiData.amount) * 100);
-      const splitAmountInCents = uiData.splitAmount ? Math.round(parseFloat(uiData.splitAmount) * 100) : 0;
-      const payload = { ...uiData, amount: amountInCents, splitAmount: isNaN(splitAmountInCents) ? 0 : splitAmountInCents };
+      const payload = { ...uiData, amount: toPaise(uiData.amount), splitAmount: toPaiseOr(uiData.splitAmount, 0) };
       const validated = api.expenses.update.input.parse(payload);
       
       const url = buildUrl(api.expenses.update.path, { id });
@@ -147,8 +138,9 @@ export function useBudget(month: string) {
   return useQuery({
     queryKey: ['/api/budgets', month],
     queryFn: async () => {
-      const res = await fetch(`/api/budgets/${month}`);
-      if (!res.ok) return null;
+      const res = await fetch(`/api/budgets/${month}`, { credentials: "include" });
+      if (res.status === 404) return null; // no budget set for this month
+      await throwIfResNotOk(res);
       return res.json();
     },
   });
@@ -159,11 +151,11 @@ export function useSetBudget() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ month, amount }: { month: string; amount: number }) => {
+    mutationFn: async ({ month, amount }: { month: string; amount: number /* paise */ }) => {
       const res = await fetch('/api/budgets', {
         method: 'POST',
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ month, amount: Math.round(amount * 100) }),
+        body: JSON.stringify({ month, amount }),
       });
       if (!res.ok) throw new Error("Failed to set budget");
       return res.json();

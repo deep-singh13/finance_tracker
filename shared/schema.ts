@@ -96,7 +96,7 @@ export const gmailSync = pgTable("gmail_sync", {
 
 export const insertExpenseSchema = createInsertSchema(expenses).omit({ id: true, createdAt: true }).extend({
   tags: z.array(z.string()).optional().nullable(),
-  splitAmount: z.coerce.number().min(0).optional(),
+  splitAmount: z.coerce.number().int().min(0).optional(), // paise
 });
 export const insertBudgetSchema = createInsertSchema(budgets).omit({ id: true });
 export const insertGmailSyncSchema = createInsertSchema(gmailSync).omit({ id: true });

@@ -35,7 +35,7 @@ export const api = {
       method: 'POST' as const,
       path: '/api/expenses' as const,
       input: insertExpenseSchema.extend({
-        amount: z.coerce.number().positive(),
+        amount: z.coerce.number().int().positive(), // paise
       }),
       responses: {
         201: z.custom<typeof expenses.$inferSelect>(),
@@ -46,7 +46,7 @@ export const api = {
       method: 'PUT' as const,
       path: '/api/expenses/:id' as const,
       input: insertExpenseSchema.partial().extend({
-        amount: z.coerce.number().positive().optional(),
+        amount: z.coerce.number().int().positive().optional(), // paise
       }),
       responses: {
         200: z.custom<typeof expenses.$inferSelect>(),
@@ -77,7 +77,7 @@ export const api = {
       path: '/api/budgets' as const,
       input: z.object({
         month: z.string(),
-        amount: z.coerce.number().positive(),
+        amount: z.coerce.number().int().positive(), // paise
       }),
       responses: {
         200: z.custom<any>(),

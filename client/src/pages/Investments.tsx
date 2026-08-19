@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import type { Investment } from "@shared/schema";
+import { formatPaise, toPaise, toRupees } from "@shared/paise";
+import { sipTotalForMonth } from "@shared/month";
 
 const INVESTMENT_TYPES = ["SIP", "Lump Sum", "FD", "PPF", "NPS", "Other"];
 
@@ -18,10 +20,8 @@ const TYPE_COLORS: Record<string, string> = {
   Other: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
 };
 
-const fmt = (paise: number) =>
-  (paise / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+const fmt = (paise: number) => formatPaise(paise);
 
-const currentMonthStr = format(new Date(), "yyyy-MM");
 const currentMonthShort = format(new Date(), "MMM");
 
 // Estimate total invested for SIPs based on months since start
@@ -53,7 +53,7 @@ function InvestmentModal({
       ? {
           name: initial.name,
           type: initial.type,
-          amount: (initial.amount / 100).toString(),
+          amount: String(toRupees(initial.amount)),
           startDate: initial.startDate ?? "",
           notes: initial.notes ?? "",
         }
@@ -69,7 +69,7 @@ function InvestmentModal({
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, amount: parseFloat(form.amount) }),
+        body: JSON.stringify({ ...form, amount: toPaise(form.amount) }),
       });
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
@@ -134,11 +134,6 @@ function InvestmentModal({
 export default function Investments() {
   const { data: investments = [], isLoading } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
-    queryFn: async () => {
-      const res = await fetch("/api/investments", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -175,9 +170,15 @@ export default function Investments() {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const currentMonthStr = format(new Date(), "yyyy-MM");
   const activeSIPs = investments.filter(i => i.type === "SIP" && i.isActive);
-  const activeUnskippedSIPs = activeSIPs.filter(i => !(i.skippedMonths ?? []).includes(currentMonthStr));
-  const monthlySIP = activeUnskippedSIPs.reduce((s, i) => s + i.amount, 0);
+  // Same rule the Dashboard's Net Cash Flow uses — including the start-month
+  // check this page used to be missing.
+  const monthlySIP = sipTotalForMonth(investments, currentMonthStr);
+  const countedSIPs = activeSIPs.filter(i =>
+    !(i.skippedMonths ?? []).includes(currentMonthStr) &&
+    (!i.startDate || i.startDate.slice(0, 7) <= currentMonthStr)
+  );
   const skippedThisMonth = activeSIPs.filter(i => (i.skippedMonths ?? []).includes(currentMonthStr));
   const totalEstimated = investments.reduce((s, i) => s + estimatedTotal(i), 0);
 
@@ -210,10 +211,10 @@ export default function Investments() {
             </span>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-lg text-muted-foreground">₹</span>
-              <span className="text-2xl font-bold">{(monthlySIP / 100).toLocaleString("en-IN")}</span>
+              <span className="text-2xl font-bold">{formatPaise(monthlySIP, { symbol: false, decimals: "auto" })}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">
-              {activeUnskippedSIPs.length} active
+              {countedSIPs.length} active
               {skippedThisMonth.length > 0 && (
                 <span className="text-amber-600 dark:text-amber-400"> · {skippedThisMonth.length} skipped</span>
               )}
@@ -223,7 +224,7 @@ export default function Investments() {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Est. Total Invested</span>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-lg text-muted-foreground">₹</span>
-              <span className="text-2xl font-bold">{(totalEstimated / 100).toLocaleString("en-IN")}</span>
+              <span className="text-2xl font-bold">{formatPaise(totalEstimated, { symbol: false, decimals: "auto" })}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">{investments.length} investment{investments.length !== 1 ? "s" : ""}</p>
           </div>

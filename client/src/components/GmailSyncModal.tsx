@@ -4,7 +4,10 @@ import { format } from "date-fns";
 import { CategoryIcon, CATEGORIES } from "./CategoryIcon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatPaise, toPaiseOr, toRupees } from "@shared/paise";
+import type { StagedTransaction, StagedEdit } from "@shared/gmail";
+import type { Card } from "@shared/schema";
 
 const INCOME_SOURCES = [
   { value: "salary",     label: "Salary" },
@@ -12,18 +15,6 @@ const INCOME_SOURCES = [
   { value: "investment", label: "Investment" },
   { value: "other",      label: "Other" },
 ] as const;
-
-interface StagedTx {
-  tempId: string;
-  amount: number;
-  description: string;
-  category: string;
-  date: string;
-  externalId: string;
-  type: "debit" | "credit";
-  incomeSource: "salary" | "freelance" | "investment" | "other";
-  splitAmount: number;
-}
 
 type ModalState = "waiting" | "reviewing" | "committing" | "done";
 
@@ -34,9 +25,11 @@ interface Props {
 
 export function GmailSyncModal({ open, onClose }: Props) {
   const [state, setState] = useState<ModalState>("waiting");
-  const [transactions, setTransactions] = useState<StagedTx[]>([]);
+  const [transactions, setTransactions] = useState<StagedTransaction[]>([]);
+  // Cards the review step can route a transaction to, matched by last 4 digits.
+  const { data: cards = [] } = useQuery<Card[]>({ queryKey: ["/api/cards"], enabled: open });
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<StagedTx>>({});
+  const [editForm, setEditForm] = useState<StagedEdit>({});
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const queryClient = useQueryClient();
@@ -55,7 +48,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
     try {
       const res = await fetch("/api/gmail/staged");
       if (!res.ok) return;
-      const data: StagedTx[] = await res.json();
+      const data: StagedTransaction[] = await res.json();
       if (data.length > 0) {
         setTransactions(data);
         setState("reviewing");
@@ -77,7 +70,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
     setTransactions(prev => prev.filter(t => t.tempId !== tempId));
   };
 
-  const startEdit = (tx: StagedTx) => {
+  const startEdit = (tx: StagedTransaction) => {
     setEditingId(tx.tempId);
     setEditForm({
       amount: tx.amount,
@@ -86,6 +79,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
       date: tx.date,
       incomeSource: tx.incomeSource,
       splitAmount: tx.splitAmount,
+      ...(tx.type === "debit" ? { cardLast4: tx.cardLast4 ?? null } : {}),
     });
   };
 
@@ -101,7 +95,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
       body: JSON.stringify(editForm),
     });
     if (res.ok) {
-      const updated: StagedTx = await res.json();
+      const updated: StagedTransaction = await res.json();
       setTransactions(prev => prev.map(t => t.tempId === tempId ? updated : t));
       setEditingId(null);
       setEditForm({});
@@ -127,8 +121,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
 
   if (!open) return null;
 
-  const fmt = (paise: number) =>
-    `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (paise: number) => formatPaise(paise);
 
   const debits  = transactions.filter(t => t.type !== "credit");
   const credits = transactions.filter(t => t.type === "credit");
@@ -227,6 +220,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
                       <div className="divide-y divide-border/40">
                         {debits.map(tx => (
                           <TxRow
+                            cards={cards}
                             key={tx.tempId}
                             tx={tx}
                             editingId={editingId}
@@ -255,6 +249,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
                       <div className="divide-y divide-border/40">
                         {credits.map(tx => (
                           <TxRow
+                            cards={cards}
                             key={tx.tempId}
                             tx={tx}
                             editingId={editingId}
@@ -326,18 +321,21 @@ export function GmailSyncModal({ open, onClose }: Props) {
 
 // ── Extracted row component ────────────────────────────────────────────────────
 interface TxRowProps {
-  tx: StagedTx;
+  tx: StagedTransaction;
   editingId: string | null;
-  editForm: Partial<StagedTx>;
-  setEditForm: React.Dispatch<React.SetStateAction<Partial<StagedTx>>>;
-  startEdit: (tx: StagedTx) => void;
+  editForm: StagedEdit;
+  setEditForm: React.Dispatch<React.SetStateAction<StagedEdit>>;
+  startEdit: (tx: StagedTransaction) => void;
   cancelEdit: () => void;
   saveEdit: (id: string) => void;
   handleDelete: (id: string) => void;
   fmt: (n: number) => string;
+  cards: Card[];
 }
 
-function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, saveEdit, handleDelete, fmt }: TxRowProps) {
+function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, saveEdit, handleDelete, fmt, cards }: TxRowProps) {
+  // undefined = untouched (fall back to the staged value); null = explicitly cleared.
+  const selectedCard = editForm.cardLast4 !== undefined ? editForm.cardLast4 : (tx.cardLast4 ?? null);
   const isCredit = tx.type === "credit";
 
   if (editingId === tx.tempId) {
@@ -348,8 +346,8 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
           <span className="text-[12px] text-muted-foreground w-24 shrink-0">Amount (₹)</span>
           <input
             type="number" step="0.01"
-            value={((editForm.amount ?? tx.amount) / 100).toFixed(2)}
-            onChange={e => setEditForm(f => ({ ...f, amount: Math.round(parseFloat(e.target.value) * 100) }))}
+            value={toRupees(editForm.amount ?? tx.amount).toFixed(2)}
+            onChange={e => setEditForm(f => ({ ...f, amount: toPaiseOr(e.target.value, 0) }))}
             className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
         </div>
@@ -359,10 +357,9 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
             <span className="text-[12px] text-muted-foreground w-24 shrink-0">Split (₹)</span>
             <input
               type="number" step="0.01"
-              value={((editForm.splitAmount ?? tx.splitAmount ?? 0) / 100).toFixed(2)}
+              value={toRupees(editForm.splitAmount ?? tx.splitAmount ?? 0).toFixed(2)}
               onChange={e => {
-                const parsed = parseFloat(e.target.value);
-                setEditForm(f => ({ ...f, splitAmount: isNaN(parsed) ? 0 : Math.round(parsed * 100) }));
+                setEditForm(f => ({ ...f, splitAmount: toPaiseOr(e.target.value, 0) }));
               }}
               className="flex-1 bg-muted rounded-xl px-3 py-2 text-[14px] font-medium focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
             />
@@ -430,6 +427,39 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
           </div>
         )}
 
+        {/* Card that paid — the server matches this against cards.last4 at commit */}
+        {!isCredit && (
+          <div className="flex items-start gap-3">
+            <span className="text-[12px] text-muted-foreground w-24 shrink-0 pt-1.5">Paid with</span>
+            <div className="flex flex-wrap gap-1.5">
+              <button type="button"
+                onClick={() => setEditForm(f => ({ ...f, cardLast4: null }))}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
+                  selectedCard === null
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70"
+                )}
+              >
+                Bank / Cash
+              </button>
+              {cards.filter(c => c.isActive).map(c => (
+                <button key={c.id} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, cardLast4: c.last4 }))}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
+                    selectedCard === c.last4
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  )}
+                >
+                  {c.name} ··{c.last4}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex gap-2 pt-1">
           <button onClick={cancelEdit}
@@ -462,6 +492,11 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
           {isCredit && (
             <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-500/10 text-green-600 dark:text-green-400 shrink-0">
               CREDIT
+            </span>
+          )}
+          {!isCredit && tx.cardLast4 && (
+            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">
+              ··{tx.cardLast4}
             </span>
           )}
         </div>

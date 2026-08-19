@@ -15,8 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
-import { emiTotalForMonth } from "@shared/emi";
+import { monthSummary, netAmount } from "@shared/month";
 import type { Subscription, Investment, Emi } from "@shared/schema";
+import { formatPaise, toRupees, toPaiseOr } from "@shared/paise";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -75,40 +76,13 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
-// Amount actually counted toward totals: the transaction amount minus anything received back in a split.
-const netAmount = (e: ExpenseResponse) => e.amount - (e.splitAmount || 0);
-
-/**
- * Insights for `month` (a YYYY-MM key). The daily average divides by days elapsed
- * for the running month, but by the full month length for a month already past.
- */
-function calculateMonthlyInsights(expenses: ExpenseResponse[], month: string) {
-  const now = new Date();
-  const monthDate = parseISO(`${month}-01`);
-  const isCurrent = isSameMonth(monthDate, now);
-  const monthExpenses = expenses.filter(e => e.date.startsWith(month));
-  const total = monthExpenses.reduce((sum, e) => sum + netAmount(e), 0);
-  const categories: Record<string, number> = {};
-  monthExpenses.forEach(e => {
-    categories[e.category] = (categories[e.category] || 0) + netAmount(e);
-  });
-  const topCat = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
-  const days = isCurrent ? now.getDate() : getDaysInMonth(monthDate);
-  return {
-    total,
-    count: monthExpenses.length,
-    topCategory: topCat ? { name: topCat[0], amount: topCat[1] } : null,
-    dailyAvg: monthExpenses.length > 0 ? total / days : 0
-  };
-}
-
 function calculateWeeklyTotals(expenses: ExpenseResponse[]) {
   const now = new Date();
   const last7Days = eachDayOfInterval({ start: subWeeks(now, 6), end: now });
   return last7Days.map(day => {
     const dayStr = format(day, "yyyy-MM-dd");
     const total = expenses.filter(e => e.date === dayStr).reduce((sum, e) => sum + netAmount(e), 0);
-    return { name: format(day, "EEE"), total: total / 100 };
+    return { name: format(day, "EEE"), total: toRupees(total) };
   });
 }
 
@@ -118,7 +92,7 @@ function calculateMonthlyTotals(expenses: ExpenseResponse[], endMonth: Date) {
   return last6Months.map(m => {
     const mStr = format(m, "yyyy-MM");
     const total = expenses.filter(e => e.date.startsWith(mStr)).reduce((sum, e) => sum + netAmount(e), 0);
-    return { name: format(m, "MMM"), total: total / 100 };
+    return { name: format(m, "MMM"), total: toRupees(total) };
   });
 }
 
@@ -133,27 +107,12 @@ export default function Dashboard() {
   const { data: incomeList } = useIncome();
   const { data: subscriptions } = useQuery<Subscription[]>({
     queryKey: ["/api/subscriptions"],
-    queryFn: async () => {
-      const res = await fetch("/api/subscriptions", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
   const { data: investments } = useQuery<Investment[]>({
     queryKey: ["/api/investments"],
-    queryFn: async () => {
-      const res = await fetch("/api/investments", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
   const { data: emis } = useQuery<Emi[]>({
     queryKey: ["/api/emis"],
-    queryFn: async () => {
-      const res = await fetch("/api/emis", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
 
   // Every month-scoped figure on this page follows `selectedMonth`.
@@ -166,58 +125,46 @@ export default function Dashboard() {
   const setBudgetMutation = useSetBudget();
   const [newBudget, setNewBudget] = useState("");
 
-  const { todayTotal, weekTotal, monthTotal, lastMonthTotal, monthlyIncomeTotal, monthlySIPTotal, monthlyEmiTotal, monthlySplitTotal, categoryData, monthlyInsights, weeklyTrend, monthlyTrend } = useMemo(() => {
-    if (!expenses) return {
-      todayTotal: 0, weekTotal: 0, monthTotal: 0, lastMonthTotal: 0,
-      monthlyIncomeTotal: 0, monthlySIPTotal: 0, monthlyEmiTotal: 0, monthlySplitTotal: 0,
-      categoryData: [], monthlyInsights: null, weeklyTrend: [], monthlyTrend: []
-    };
+  // Every month figure comes from one shared module — the widget and the
+  // Investments tab call the same function, so they cannot drift apart.
+  const summary = useMemo(
+    () => monthSummary({ expenses, income: incomeList, investments, emis }, selectedMonthStr),
+    [expenses, incomeList, investments, emis, selectedMonthStr],
+  );
 
-    let today = 0, week = 0, month = 0, lastMonth = 0, split = 0;
-    const allCategories: Record<string, number> = {};
+  const monthTotal = summary.expenses;
+  const monthlyIncomeTotal = summary.income;
+  const monthlySIPTotal = summary.sip;
+  const monthlyEmiTotal = summary.emi;
+  const monthlySplitTotal = summary.split;
+
+  // Today and this week stay anchored to the real today — they're only shown on
+  // the current month — so they don't belong to a month summary.
+  const { todayTotal, weekTotal, lastMonthTotal, categoryData, weeklyTrend, monthlyTrend } = useMemo(() => {
+    if (!expenses) return { todayTotal: 0, weekTotal: 0, lastMonthTotal: 0, categoryData: [], weeklyTrend: [], monthlyTrend: [] };
+
+    let today = 0, week = 0;
     const now = new Date();
-    // Today/week stay anchored to the real today — they're only shown on the current month.
     const startOfCurrentWeek = startOfWeek(now, { weekStartsOn: 1 });
-    const prevMonthStr = format(subMonths(selectedMonth, 1), "yyyy-MM");
 
     expenses.forEach(exp => {
       const expDate = parseISO(exp.date);
       const net = netAmount(exp);
       if (isToday(expDate)) today += net;
       if (isAfter(expDate, startOfCurrentWeek) || expDate.getTime() === startOfCurrentWeek.getTime()) week += net;
-      if (exp.date.startsWith(selectedMonthStr)) {
-        month += net;
-        split += exp.splitAmount || 0;
-        allCategories[exp.category] = (allCategories[exp.category] || 0) + net;
-      }
-      if (exp.date.startsWith(prevMonthStr)) lastMonth += net;
     });
 
-    const monthlyInc = (incomeList ?? [])
-      .filter(i => i.date.startsWith(selectedMonthStr))
-      .reduce((sum, i) => sum + i.amount, 0);
-
-    // A SIP only counts from its start month onward — otherwise it would appear
-    // in months predating the investment.
-    const sipTotal = (investments ?? [])
-      .filter(inv =>
-        inv.type === "SIP" &&
-        inv.isActive &&
-        !(inv.skippedMonths ?? []).includes(selectedMonthStr) &&
-        (!inv.startDate || inv.startDate.slice(0, 7) <= selectedMonthStr)
-      )
-      .reduce((sum, inv) => sum + inv.amount, 0);
+    const prevMonthStr = format(subMonths(selectedMonth, 1), "yyyy-MM");
 
     return {
-      todayTotal: today, weekTotal: week, monthTotal: month, lastMonthTotal: lastMonth,
-      monthlyIncomeTotal: monthlyInc, monthlySIPTotal: sipTotal,
-      monthlyEmiTotal: emiTotalForMonth(emis, selectedMonthStr), monthlySplitTotal: split,
-      categoryData: Object.entries(allCategories).map(([name, value]) => ({ name, value: value / 100 })),
-      monthlyInsights: calculateMonthlyInsights(expenses, selectedMonthStr),
+      todayTotal: today,
+      weekTotal: week,
+      lastMonthTotal: monthSummary({ expenses }, prevMonthStr).expenses,
+      categoryData: summary.byCategory.map(c => ({ name: c.name, value: toRupees(c.total) })),
       weeklyTrend: calculateWeeklyTotals(expenses),
       monthlyTrend: calculateMonthlyTotals(expenses, selectedMonth),
     };
-  }, [expenses, incomeList, investments, emis, selectedMonth, selectedMonthStr]);
+  }, [expenses, selectedMonth, summary]);
 
   const upcomingSubscriptions = useMemo(() => {
     if (!subscriptions) return [];
@@ -227,8 +174,7 @@ export default function Dashboard() {
     );
   }, [subscriptions, selectedMonthStr]);
 
-  const fmt = (cents: number) =>
-    (cents / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (paise: number) => formatPaise(paise, { symbol: false });
 
   const displayedTotal = useCountUp(monthTotal);
 
@@ -238,11 +184,11 @@ export default function Dashboard() {
   const budgetPct = budget > 0 ? (monthTotal / budget) * 100 : 0;
   const monthVsLastPct = lastMonthTotal > 0 ? ((monthTotal - lastMonthTotal) / lastMonthTotal) * 100 : null;
   // Net cash flow counts investments and EMIs as outflow; budget only tracks expenses
-  const netCashFlow = monthlyIncomeTotal - monthTotal - monthlySIPTotal - monthlyEmiTotal;
+  const netCashFlow = summary.netCashFlow;
 
   const handleSetBudget = () => {
-    const amount = parseFloat(newBudget);
-    if (!isNaN(amount)) { setBudgetMutation.mutate({ month: selectedMonthStr, amount }); setNewBudget(""); }
+    const amount = toPaiseOr(newBudget, 0); // paise
+    if (amount > 0) { setBudgetMutation.mutate({ month: selectedMonthStr, amount }); setNewBudget(""); }
   };
 
   // Privacy mask — replaces any amount string with ••••••
@@ -380,11 +326,11 @@ export default function Dashboard() {
               <>
                 <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
                   <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Daily Avg</p>
-                  <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(monthlyInsights?.dailyAvg || 0)}`}</p>
+                  <p className="text-[20px] font-bold text-white">{isPrivate ? "••••••" : `₹${fmt(summary.dailyAvg)}`}</p>
                 </div>
                 <div className="bg-white/10 rounded-2xl px-4 py-3 border border-white/10">
                   <p className="text-[10px] font-semibold text-blue-200/60 uppercase tracking-wider mb-1">Transactions</p>
-                  <p className="text-[20px] font-bold text-white">{monthlyInsights?.count ?? 0}</p>
+                  <p className="text-[20px] font-bold text-white">{summary.count}</p>
                 </div>
               </>
             )}
@@ -617,7 +563,7 @@ export default function Dashboard() {
                   </div>
                   <div className="divide-y divide-border/40">
                     {[
-                      { label: "Total Spent", value: `₹${fmt(monthlyInsights?.total || 0)}` },
+                      { label: "Total Spent", value: `₹${fmt(summary.expenses)}` },
                       {
                         label: "vs Last Month",
                         value: monthVsLastPct !== null
@@ -628,8 +574,8 @@ export default function Dashboard() {
                           : monthVsLastPct > 0 ? "text-red-600 dark:text-red-400"
                           : "text-emerald-600 dark:text-emerald-400",
                       },
-                      { label: "Top Category", value: monthlyInsights?.topCategory ? `${monthlyInsights.topCategory.name} · ₹${fmt(monthlyInsights.topCategory.amount)}` : "—" },
-                      { label: "Daily Average", value: `₹${fmt(monthlyInsights?.dailyAvg || 0)}` },
+                      { label: "Top Category", value: summary.topCategory ? `${summary.topCategory.name} · ₹${fmt(summary.topCategory.total)}` : "—" },
+                      { label: "Daily Average", value: `₹${fmt(summary.dailyAvg)}` },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="flex justify-between items-center px-5 py-3.5">
                         <span className="text-[13px] text-muted-foreground">{label}</span>

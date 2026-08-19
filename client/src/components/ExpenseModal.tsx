@@ -8,6 +8,7 @@ import { useCreateExpense, useUpdateExpense } from "@/hooks/use-expenses";
 import { CATEGORIES, CategoryIcon } from "./CategoryIcon";
 import { type ExpenseResponse } from "@shared/routes";
 import { cn } from "@/lib/utils";
+import { toRupees } from "@shared/paise";
 
 interface ExpenseModalProps {
   children?: React.ReactNode;
@@ -34,13 +35,13 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
 
   useEffect(() => {
     if (expense && open) {
-      setAmount((expense.amount / 100).toString());
+      setAmount(String(toRupees(expense.amount)));
       setDescription(expense.description);
       setCategory(expense.category);
       setDate(expense.date);
       setTags(expense.tags ?? []);
       setTagInput("");
-      setSplitAmount(expense.splitAmount ? (expense.splitAmount / 100).toString() : "");
+      setSplitAmount(expense.splitAmount ? String(toRupees(expense.splitAmount)) : "");
     } else if (!expense && open) {
       setAmount("");
       setDescription("");

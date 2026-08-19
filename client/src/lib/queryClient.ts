@@ -1,6 +1,8 @@
 import { QueryClient, QueryFunction, QueryCache } from "@tanstack/react-query";
 
-async function throwIfResNotOk(res: Response) {
+// The error contract the QueryCache onError handler below depends on:
+// message must start with "<status>: ". Any custom queryFn MUST use this.
+export async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);

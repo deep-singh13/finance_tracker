@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useExpenses } from "@/hooks/use-expenses";
 import { CategoryIcon } from "@/components/CategoryIcon";
+import { formatPaise, toPaise, toRupees } from "@shared/paise";
 import { cn } from "@/lib/utils";
 import { cardSummary, closedCycles, cycleTotal, isPaid, daysUntilDue, type Cycle } from "@shared/card";
 import type { Card as CardType } from "@shared/schema";
@@ -14,11 +15,9 @@ import type { ExpenseResponse } from "@shared/routes";
 
 const NETWORKS = ["VISA", "Mastercard", "RuPay", "Amex"];
 
-const fmt = (paise: number) =>
-  (paise / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+const fmt = (paise: number) => formatPaise(paise, { symbol: false, decimals: 0 });
 
-const fmt2 = (paise: number) =>
-  (paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt2 = (paise: number) => formatPaise(paise, { symbol: false });
 
 /** Utilization above 30% starts hurting your credit score; 90%+ is critical. */
 function utilTone(pct: number) {
@@ -45,7 +44,7 @@ function CardModal({ initial, onClose }: { initial?: CardType; onClose: () => vo
           issuer: initial.issuer,
           network: initial.network ?? "VISA",
           last4: initial.last4,
-          creditLimit: initial.creditLimit != null ? (initial.creditLimit / 100).toString() : "",
+          creditLimit: initial.creditLimit != null ? String(toRupees(initial.creditLimit)) : "",
           statementDay: initial.statementDay.toString(),
           dueDay: initial.dueDay.toString(),
         }
@@ -65,7 +64,7 @@ function CardModal({ initial, onClose }: { initial?: CardType; onClose: () => vo
           issuer: form.issuer,
           network: form.network || null,
           last4: form.last4,
-          creditLimit: form.creditLimit ? parseFloat(form.creditLimit) : null,
+          creditLimit: form.creditLimit ? toPaise(form.creditLimit) : null,
           statementDay: parseInt(form.statementDay, 10) || 1,
           dueDay: parseInt(form.dueDay, 10) || 20,
         }),
@@ -423,11 +422,6 @@ function CardPanel({ card, allExpenses }: { card: CardType; allExpenses: Expense
 export default function Cards() {
   const { data: cards = [], isLoading } = useQuery<CardType[]>({
     queryKey: ["/api/cards"],
-    queryFn: async () => {
-      const res = await fetch("/api/cards", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
   const { data: expenses = [] } = useExpenses();
   const [adding, setAdding] = useState(false);

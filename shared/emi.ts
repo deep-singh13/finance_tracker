@@ -1,5 +1,15 @@
 import { parseISO, differenceInMonths, addMonths, format, startOfMonth } from "date-fns";
-import type { Emi } from "./schema";
+
+/**
+ * The parts of an EMI this module actually needs. Widened from the Drizzle row
+ * so callers that don't have one (the widget worker, tests) can still use it.
+ */
+export interface EmiLike {
+  isActive: boolean;
+  startDate: string;
+  tenureMonths: number;
+  amount: number;
+}
 
 /** Parses a YYYY-MM month key into the first day of that month. */
 function monthStart(month: string): Date {
@@ -10,19 +20,19 @@ function monthStart(month: string): Date {
  * 1-based instalment number falling in `month` (YYYY-MM).
  * Returns 0 or less if the loan hadn't started yet, and > tenureMonths once it's done.
  */
-export function installmentIndex(emi: Emi, month: string): number {
+export function installmentIndex(emi: EmiLike, month: string): number {
   return differenceInMonths(monthStart(month), startOfMonth(parseISO(emi.startDate))) + 1;
 }
 
 /** Whether an instalment is actually debited in `month`. */
-export function isDueInMonth(emi: Emi, month: string): boolean {
+export function isDueInMonth(emi: EmiLike, month: string): boolean {
   if (!emi.isActive) return false;
   const idx = installmentIndex(emi, month);
   return idx >= 1 && idx <= emi.tenureMonths;
 }
 
 /** Total EMI outflow (paise) for `month` — the figure that feeds Net Cash Flow. */
-export function emiTotalForMonth(emis: Emi[] | undefined, month: string): number {
+export function emiTotalForMonth(emis: EmiLike[] | undefined, month: string): number {
   return (emis ?? [])
     .filter(e => isDueInMonth(e, month))
     .reduce((sum, e) => sum + e.amount, 0);
@@ -46,7 +56,7 @@ export interface EmiProgress {
   isUpcoming: boolean;
 }
 
-export function emiProgress(emi: Emi, asOfMonth: string): EmiProgress {
+export function emiProgress(emi: EmiLike, asOfMonth: string): EmiProgress {
   const idx = installmentIndex(emi, asOfMonth);
   const paid = Math.min(Math.max(idx, 0), emi.tenureMonths);
   const remaining = emi.tenureMonths - paid;

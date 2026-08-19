@@ -1,17 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import type { Income } from "@shared/schema";
+import { toPaise } from "@shared/paise";
 
 const INCOME_KEY = "/api/income";
 
 export function useIncome() {
   return useQuery<Income[]>({
     queryKey: [INCOME_KEY],
-    queryFn: async () => {
-      const res = await fetch(INCOME_KEY, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch income");
-      return res.json();
-    },
   });
 }
 
@@ -31,7 +27,7 @@ export function useCreateIncome() {
       const res = await fetch(INCOME_KEY, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...data, amount: parseFloat(data.amount) }),
+        body: JSON.stringify({ ...data, amount: toPaise(data.amount) }),
         credentials: "include",
       });
       if (!res.ok) {
@@ -55,7 +51,7 @@ export function useUpdateIncome() {
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<UIIncomeInput> }) => {
       const body: Record<string, unknown> = { ...data };
-      if (data.amount !== undefined) body.amount = parseFloat(data.amount);
+      if (data.amount !== undefined) body.amount = toPaise(data.amount);
       const res = await fetch(`/api/income/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

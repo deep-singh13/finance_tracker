@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIncome, useCreateIncome, useUpdateIncome, useDeleteIncome, type UIIncomeInput } from "@/hooks/use-income";
 import type { Income } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { formatPaise, toRupees } from "@shared/paise";
 
 const SOURCES: { value: UIIncomeInput["source"]; label: string; color: string }[] = [
   { value: "salary",     label: "Salary",     color: "bg-blue-500/10 text-blue-600 dark:text-blue-400" },
@@ -16,12 +17,11 @@ const SOURCES: { value: UIIncomeInput["source"]; label: string; color: string }[
   { value: "other",      label: "Other",      color: "bg-muted text-muted-foreground" },
 ];
 
-const fmt = (paise: number) =>
-  (paise / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+const fmt = (paise: number) => formatPaise(paise);
 
 function IncomeModal({ initial, onClose }: { initial?: Income; onClose: () => void }) {
   const [form, setForm] = useState<UIIncomeInput>({
-    amount: initial ? (initial.amount / 100).toString() : "",
+    amount: initial ? String(toRupees(initial.amount)) : "",
     description: initial?.description ?? "",
     source: (initial?.source as UIIncomeInput["source"]) ?? "salary",
     date: initial?.date ?? format(new Date(), "yyyy-MM-dd"),

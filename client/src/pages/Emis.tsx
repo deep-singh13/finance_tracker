@@ -7,11 +7,10 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { emiProgress, emiTotalForMonth, isDueInMonth } from "@shared/emi";
 import type { Emi } from "@shared/schema";
+import { formatPaise, toPaise, toRupees } from "@shared/paise";
 
-const fmt = (paise: number) =>
-  (paise / 100).toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
+const fmt = (paise: number) => formatPaise(paise, { decimals: 0 });
 
-const currentMonthStr = format(new Date(), "yyyy-MM");
 
 interface FormState {
   name: string;
@@ -35,11 +34,11 @@ function EmiModal({ initial, onClose }: { initial?: Emi; onClose: () => void }) 
       ? {
           name: initial.name,
           lender: initial.lender ?? "",
-          amount: (initial.amount / 100).toString(),
+          amount: String(toRupees(initial.amount)),
           tenureMonths: initial.tenureMonths.toString(),
           startDate: initial.startDate,
           dueDay: initial.dueDay.toString(),
-          totalAmount: initial.totalAmount != null ? (initial.totalAmount / 100).toString() : "",
+          totalAmount: initial.totalAmount != null ? String(toRupees(initial.totalAmount)) : "",
           notes: initial.notes ?? "",
         }
       : emptyForm
@@ -57,11 +56,11 @@ function EmiModal({ initial, onClose }: { initial?: Emi; onClose: () => void }) 
         body: JSON.stringify({
           name: form.name,
           lender: form.lender || null,
-          amount: parseFloat(form.amount),
+          amount: toPaise(form.amount),
           tenureMonths: parseInt(form.tenureMonths, 10),
           startDate: form.startDate,
           dueDay: parseInt(form.dueDay, 10) || 1,
-          totalAmount: form.totalAmount ? parseFloat(form.totalAmount) : null,
+          totalAmount: form.totalAmount ? toPaise(form.totalAmount) : null,
           notes: form.notes || null,
         }),
       });
@@ -144,11 +143,6 @@ function EmiModal({ initial, onClose }: { initial?: Emi; onClose: () => void }) 
 export default function Emis() {
   const { data: emis = [], isLoading } = useQuery<Emi[]>({
     queryKey: ["/api/emis"],
-    queryFn: async () => {
-      const res = await fetch("/api/emis", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -164,6 +158,7 @@ export default function Emis() {
     },
   });
 
+  const currentMonthStr = format(new Date(), "yyyy-MM");
   const monthlyTotal = emiTotalForMonth(emis, currentMonthStr);
   const dueThisMonth = emis.filter(e => isDueInMonth(e, currentMonthStr));
   const totalRemaining = emis
@@ -196,7 +191,7 @@ export default function Emis() {
             </span>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-lg text-muted-foreground">₹</span>
-              <span className="text-2xl font-bold">{(monthlyTotal / 100).toLocaleString("en-IN")}</span>
+              <span className="text-2xl font-bold">{formatPaise(monthlyTotal, { symbol: false, decimals: "auto" })}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">{dueThisMonth.length} active</p>
           </div>
@@ -204,7 +199,7 @@ export default function Emis() {
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Remaining EMIs</span>
             <div className="flex items-baseline gap-1 mt-1">
               <span className="text-lg text-muted-foreground">₹</span>
-              <span className="text-2xl font-bold">{(totalRemaining / 100).toLocaleString("en-IN")}</span>
+              <span className="text-2xl font-bold">{formatPaise(totalRemaining, { symbol: false, decimals: "auto" })}</span>
             </div>
             <p className="text-[11px] text-muted-foreground mt-1">{emis.length} loan{emis.length !== 1 ? "s" : ""}</p>
           </div>

@@ -7,11 +7,11 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import type { Subscription } from "@shared/schema";
+import { formatPaise, toPaise, toRupees } from "@shared/paise";
 
 const CATEGORIES = ["Entertainment", "Utilities", "Health", "Food", "Shopping", "Transport", "Travel", "Other"];
 
-const fmt = (paise: number) =>
-  (paise / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+const fmt = (paise: number) => formatPaise(paise);
 
 function ordinal(n: number) {
   const s = ["th", "st", "nd", "rd"];
@@ -39,7 +39,7 @@ function SubscriptionModal({
     initial
       ? {
           name: initial.name,
-          amount: (initial.amount / 100).toString(),
+          amount: String(toRupees(initial.amount)),
           billingDay: initial.billingDay.toString(),
           category: initial.category,
         }
@@ -57,7 +57,7 @@ function SubscriptionModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          amount: parseFloat(form.amount),
+          amount: toPaise(form.amount),
           billingDay: parseInt(form.billingDay),
         }),
       });
@@ -128,11 +128,6 @@ function SubscriptionModal({
 export default function Subscriptions() {
   const { data: subs = [], isLoading } = useQuery<Subscription[]>({
     queryKey: ["/api/subscriptions"],
-    queryFn: async () => {
-      const res = await fetch("/api/subscriptions", { credentials: "include" });
-      if (!res.ok) throw new Error(`${res.status}`);
-      return res.json();
-    },
   });
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -190,7 +185,7 @@ export default function Subscriptions() {
           </span>
           <div className="flex items-baseline gap-1 mt-1">
             <span className="text-lg text-muted-foreground">₹</span>
-            <span className="text-2xl font-bold">{(monthlyTotal / 100).toLocaleString("en-IN")}</span>
+            <span className="text-2xl font-bold">{formatPaise(monthlyTotal, { symbol: false, decimals: "auto" })}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-2 text-[12px] text-muted-foreground">
             <RefreshCw className="w-3.5 h-3.5" />

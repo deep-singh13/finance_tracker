@@ -3,38 +3,16 @@ import type { Server } from "http";
 import { randomUUID } from "crypto";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import {
+  syncPayloadSchema,
+  stagedEditSchema,
+  type StagedTransaction,
+  type StagedEdit,
+} from "@shared/gmail";
 import { z } from "zod";
 import { requireAuth, handleLogin, handleLogout, handleMe, loginRateLimiter } from "./auth";
 
-const parsedTransactionSchema = z.object({
-  amount: z.number().positive(),       // in paise
-  description: z.string().min(1),
-  category: z.string().default("Miscellaneous"), // for debits
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  externalId: z.string().min(1),       // Gmail message ID for deduplication
-  type: z.enum(["debit", "credit"]).default("debit"),
-  incomeSource: z.enum(["salary", "freelance", "investment", "other"]).default("other"), // for credits
-  splitAmount: z.number().min(0).default(0), // in paise; amount received back (debits only)
-  cardLast4: z.string().regex(/^\d{4}$/).optional(), // credit card that paid, matched to cards.last4
-});
-
-const syncPayloadSchema = z.object({
-  transactions: z.array(parsedTransactionSchema),
-});
-
 // Staging store lives in memory (ephemeral — survives only while the server is up)
-interface StagedTransaction {
-  tempId: string;
-  amount: number;
-  description: string;
-  category: string;       // used for debits
-  date: string;
-  externalId: string;
-  type: "debit" | "credit";
-  incomeSource: "salary" | "freelance" | "investment" | "other"; // used for credits
-  splitAmount: number;     // in paise; amount received back (debits only)
-  cardLast4?: string;      // resolved to cards.card_id at commit time
-}
 let staged: StagedTransaction[] = [];
 
 // Helper: check X-Sync-Key header against SYNC_API_KEY env var.
@@ -192,16 +170,7 @@ export async function registerRoutes(
   app.put("/api/gmail/staged/:tempId", (req, res) => {
     const idx = staged.findIndex(t => t.tempId === req.params.tempId);
     if (idx === -1) return res.status(404).json({ message: "Not found" });
-    const stagedEditSchema = z.object({
-      amount: z.number().positive().optional(),
-      description: z.string().min(1).optional(),
-      category: z.string().min(1).optional(),
-      date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-      incomeSource: z.enum(["salary", "freelance", "investment", "other"]).optional(),
-      splitAmount: z.number().min(0).optional(),
-      cardLast4: z.string().regex(/^\d{4}$/).nullable().optional(),
-    });
-    let parsed: z.infer<typeof stagedEditSchema>;
+    let parsed: StagedEdit;
     try {
       parsed = stagedEditSchema.parse(req.body);
     } catch (err) {
@@ -276,13 +245,13 @@ export async function registerRoutes(
       const schema = z.object({
         name: z.string().min(1),
         type: z.string().min(1),
-        amount: z.coerce.number().positive(),
+        amount: z.coerce.number().int().positive(),
         startDate: z.string().optional().nullable(),
         notes: z.string().optional().nullable(),
         isActive: z.boolean().default(true),
       });
       const data = schema.parse(req.body);
-      res.status(201).json(await storage.createInvestment({ ...data, amount: Math.round(data.amount * 100) }));
+      res.status(201).json(await storage.createInvestment(data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -294,14 +263,13 @@ export async function registerRoutes(
       const schema = z.object({
         name: z.string().min(1).optional(),
         type: z.string().min(1).optional(),
-        amount: z.coerce.number().positive().optional(),
+        amount: z.coerce.number().int().positive().optional(),
         startDate: z.string().optional().nullable(),
         notes: z.string().optional().nullable(),
         isActive: z.boolean().optional(),
         skippedMonths: z.array(z.string()).optional(),
       });
       const data = schema.parse(req.body);
-      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
       res.json(await storage.updateInvestment(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -326,7 +294,7 @@ export async function registerRoutes(
         issuer: z.string().min(1),
         network: z.string().optional().nullable(),
         last4: z.string().regex(/^\d{4}$/, "Last 4 digits must be exactly 4 numbers"),
-        creditLimit: z.coerce.number().positive().optional().nullable(),
+        creditLimit: z.coerce.number().int().positive().optional().nullable(),
         statementDay: z.coerce.number().int().min(1).max(28).default(1),
         dueDay: z.coerce.number().int().min(1).max(28).default(20),
         isActive: z.boolean().default(true),
@@ -334,10 +302,7 @@ export async function registerRoutes(
       const data = schema.parse(req.body);
       const existing = await storage.getCardByLast4(data.last4);
       if (existing) return res.status(400).json({ message: `A card ending ${data.last4} already exists` });
-      res.status(201).json(await storage.createCard({
-        ...data,
-        creditLimit: data.creditLimit != null ? Math.round(data.creditLimit * 100) : null,
-      }));
+      res.status(201).json(await storage.createCard({ ...data, creditLimit: data.creditLimit ?? null }));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -351,7 +316,7 @@ export async function registerRoutes(
         issuer: z.string().min(1).optional(),
         network: z.string().optional().nullable(),
         last4: z.string().regex(/^\d{4}$/).optional(),
-        creditLimit: z.coerce.number().positive().optional().nullable(),
+        creditLimit: z.coerce.number().int().positive().optional().nullable(),
         statementDay: z.coerce.number().int().min(1).max(28).optional(),
         dueDay: z.coerce.number().int().min(1).max(28).optional(),
         isActive: z.boolean().optional(),
@@ -364,7 +329,6 @@ export async function registerRoutes(
           return res.status(400).json({ message: `A card ending ${data.last4} already exists` });
         }
       }
-      if (data.creditLimit != null) data.creditLimit = Math.round(data.creditLimit * 100);
       res.json(await storage.updateCard(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -387,8 +351,8 @@ export async function registerRoutes(
       const schema = z.object({
         name: z.string().min(1),
         lender: z.string().optional().nullable(),
-        amount: z.coerce.number().positive(),
-        totalAmount: z.coerce.number().positive().optional().nullable(),
+        amount: z.coerce.number().int().positive(),
+        totalAmount: z.coerce.number().int().positive().optional().nullable(),
         tenureMonths: z.coerce.number().int().min(1).max(600),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         dueDay: z.coerce.number().int().min(1).max(28).default(1),
@@ -396,11 +360,7 @@ export async function registerRoutes(
         isActive: z.boolean().default(true),
       });
       const data = schema.parse(req.body);
-      res.status(201).json(await storage.createEmi({
-        ...data,
-        amount: Math.round(data.amount * 100),
-        totalAmount: data.totalAmount != null ? Math.round(data.totalAmount * 100) : null,
-      }));
+      res.status(201).json(await storage.createEmi({ ...data, totalAmount: data.totalAmount ?? null }));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -412,8 +372,8 @@ export async function registerRoutes(
       const schema = z.object({
         name: z.string().min(1).optional(),
         lender: z.string().optional().nullable(),
-        amount: z.coerce.number().positive().optional(),
-        totalAmount: z.coerce.number().positive().optional().nullable(),
+        amount: z.coerce.number().int().positive().optional(),
+        totalAmount: z.coerce.number().int().positive().optional().nullable(),
         tenureMonths: z.coerce.number().int().min(1).max(600).optional(),
         startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         dueDay: z.coerce.number().int().min(1).max(28).optional(),
@@ -421,8 +381,6 @@ export async function registerRoutes(
         isActive: z.boolean().optional(),
       });
       const data = schema.parse(req.body);
-      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
-      if (data.totalAmount != null) data.totalAmount = Math.round(data.totalAmount * 100);
       res.json(await storage.updateEmi(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -444,13 +402,13 @@ export async function registerRoutes(
     try {
       const schema = z.object({
         name: z.string().min(1),
-        amount: z.coerce.number().positive(),
+        amount: z.coerce.number().int().positive(),
         billingDay: z.coerce.number().int().min(1).max(28).default(1),
         category: z.string().min(1),
         isActive: z.boolean().default(true),
       });
       const data = schema.parse(req.body);
-      res.status(201).json(await storage.createSubscription({ ...data, amount: Math.round(data.amount * 100) }));
+      res.status(201).json(await storage.createSubscription(data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -461,13 +419,12 @@ export async function registerRoutes(
     try {
       const schema = z.object({
         name: z.string().min(1).optional(),
-        amount: z.coerce.number().positive().optional(),
+        amount: z.coerce.number().int().positive().optional(),
         billingDay: z.coerce.number().int().min(1).max(28).optional(),
         category: z.string().min(1).optional(),
         isActive: z.boolean().optional(),
       });
       const data = schema.parse(req.body);
-      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
       res.json(await storage.updateSubscription(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -518,13 +475,13 @@ export async function registerRoutes(
   app.post("/api/income", async (req, res) => {
     try {
       const schema = z.object({
-        amount: z.coerce.number().positive(),
+        amount: z.coerce.number().int().positive(),
         description: z.string().min(1),
         source: z.enum(["salary", "freelance", "investment", "other"]).default("other"),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       });
       const data = schema.parse(req.body);
-      res.status(201).json(await storage.createIncome({ ...data, amount: Math.round(data.amount * 100) }));
+      res.status(201).json(await storage.createIncome(data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
@@ -534,13 +491,12 @@ export async function registerRoutes(
   app.put("/api/income/:id", async (req, res) => {
     try {
       const schema = z.object({
-        amount: z.coerce.number().positive().optional(),
+        amount: z.coerce.number().int().positive().optional(),
         description: z.string().min(1).optional(),
         source: z.enum(["salary", "freelance", "investment", "other"]).optional(),
         date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       });
       const data = schema.parse(req.body);
-      if (data.amount !== undefined) data.amount = Math.round(data.amount * 100);
       res.json(await storage.updateIncome(Number(req.params.id), data));
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
