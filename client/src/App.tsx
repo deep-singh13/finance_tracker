@@ -48,7 +48,11 @@ function TabBar() {
   ];
 
   return (
-    <nav className="tab-bar-glass fixed bottom-0 left-0 right-0 flex justify-around items-center px-0.5 py-2 pb-safe z-50">
+    <nav className="tab-bar-glass fixed bottom-0 left-0 right-0 py-2 pb-safe z-50">
+      {/* Bar itself stays edge-to-edge (glass reads correctly full-width);
+          only the tab row is capped so icons don't spread across a 1280px
+          desktop viewport with large dead gaps between them. */}
+      <div className="max-w-2xl mx-auto flex justify-around items-center px-0.5">
       {tabs.map(({ href, label, icon: Icon }) => {
         const active = location === href;
         return (
@@ -74,6 +78,7 @@ function TabBar() {
           </Link>
         );
       })}
+      </div>
     </nav>
   );
 }

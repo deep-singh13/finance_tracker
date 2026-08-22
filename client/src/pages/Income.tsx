@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIncome, useCreateIncome, useUpdateIncome, useDeleteIncome, type UIIncomeInput } from "@/hooks/use-income";
 import type { Income } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { SwipeableRow } from "@/components/SwipeableRow";
 import { formatPaise, toRupees } from "@shared/paise";
 
 const SOURCES: { value: UIIncomeInput["source"]; label: string; color: string }[] = [
@@ -42,6 +43,12 @@ function IncomeModal({ initial, onClose }: { initial?: Income; onClose: () => vo
 
   return (
     <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-border/50 bg-background/95 backdrop-blur-xl">
+      {/* Scroll lives here, not on DialogContent itself: that element also
+          needs overflow-hidden for its rounded corners, and it can't be both
+          hidden and auto on the same axis. Without this, content taller than
+          the frame used to overflow off both the top and bottom with no way
+          to reach it, instead of clipping and letting you scroll to it. */}
+      <div className="max-h-[85dvh] overflow-y-auto">
       <DialogHeader className="px-6 pt-6 pb-2">
         <DialogTitle className="text-center text-xl font-semibold">
           {initial ? "Edit Income" : "Add Income"}
@@ -123,6 +130,7 @@ function IncomeModal({ initial, onClose }: { initial?: Income; onClose: () => vo
           {initial ? "Update Income" : "Save Income"}
         </Button>
       </form>
+      </div>
     </DialogContent>
   );
 }
@@ -179,7 +187,15 @@ export default function IncomePage() {
         ) : (
           <div className="ios-list">
             {(incomeList ?? []).map(item => (
-              <div key={item.id} className="ios-list-item group">
+              <SwipeableRow
+                key={item.id}
+                id={item.id}
+                className="ios-list-item group"
+                actions={[
+                  { label: "Edit income", icon: Pencil, variant: "edit", onClick: () => setEditing(item) },
+                  { label: "Delete income", icon: Trash2, variant: "delete", onClick: () => deleteMutation.mutate(item.id) },
+                ]}
+              >
                 <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center shrink-0">
                   <Wallet className="w-5 h-5 text-green-600 dark:text-green-400" />
                 </div>
@@ -197,11 +213,13 @@ export default function IncomePage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[16px] font-semibold text-green-600 dark:text-green-400">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-[16px] font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                       +{fmt(item.amount)}
                     </span>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Desktop-only in layout too: on touch there's no hover to reveal
+                        it, so keeping it in flow left dead space after the amount. */}
+                    <div className="hidden md:flex gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={() => setEditing(item)}
                         className="p-1.5 rounded-lg hover:bg-muted transition-colors"
@@ -217,7 +235,7 @@ export default function IncomePage() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </SwipeableRow>
             ))}
           </div>
         )}

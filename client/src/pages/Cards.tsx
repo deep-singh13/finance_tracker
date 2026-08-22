@@ -85,7 +85,7 @@ function CardModal({ initial, onClose }: { initial?: CardType; onClose: () => vo
   // pb-24 on mobile keeps the Save/Cancel row clear of the fixed tab bar
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 pb-24 sm:pb-4">
-      <div className="bg-card rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl border border-border/50 max-h-[85vh] overflow-y-auto">
+      <div className="bg-card rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl border border-border/50 max-h-[85dvh] overflow-y-auto">
         <h2 className="text-lg font-bold">{initial ? "Edit Card" : "Add Card"}</h2>
 
         <div className="space-y-3">

@@ -100,26 +100,23 @@ animation: shimmer 3s linear infinite;
 
 ### Chart Colors
 
-Sequential palette for pie and bar charts:
+The Category Breakdown donut on Overview colors each slice by that category's own fixed identity color — the same `CATEGORY_HEX` map `CategoryIcon` renders from (see below), not a generic sequential palette. A category with no fixed color (data outside the fixed set) falls back to `DEFAULT_CATEGORY_HEX` (`#A1A1AA`, matching CategoryIcon's zinc-400 "Unknown" tile). This keeps a category the same color everywhere it appears — the chart legend and every list row.
 
-```js
-["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4"]
-//  blue      emerald    amber     violet      red        cyan
-```
-
-Monthly trend bars use `#8B5CF6` (violet) to distinguish from the primary-blue weekly bars.
+Bar charts are unrelated to category color and use fixed fills: weekly totals use `hsl(var(--primary))`; the 6-month trend uses `#8B5CF6` (violet) to distinguish it from the primary-blue weekly bars.
 
 ### Category Icon Colors
 
-| Category | Background | Icon |
-|---|---|---|
-| Food | `bg-orange-500` | white |
-| Entertainment | `bg-purple-500` | white |
-| Amenities | `bg-blue-500` | white |
-| Miscellaneous | `bg-zinc-500` | white |
-| Unknown | `bg-zinc-400` | white |
+| Category | Background | Hex | Icon |
+|---|---|---|---|
+| Food | `bg-orange-500` | `#F97316` | white |
+| Entertainment | `bg-purple-500` | `#A855F7` | white |
+| Amenities | `bg-blue-500` | `#3B82F6` | white |
+| Miscellaneous | `bg-teal-500` | `#14B8A6` | white |
+| Unknown | `bg-zinc-400` | `#A1A1AA` | white |
 
-Shadow tint matches background: `shadow-orange-500/20`, etc.
+Shadow tint matches background: `shadow-orange-500/20`, etc. The hex values are exported from `CategoryIcon.tsx` as `CATEGORY_HEX`/`DEFAULT_CATEGORY_HEX` for non-DOM consumers (chart fills) that can't use a Tailwind class — this is the one place category color is defined; nothing else should hardcode these hexes or the sequential chart palette.
+
+Any UI offering a category picker (Add Expense, Subscriptions) must source its options from `CATEGORIES` (`Object.keys` of the same config) rather than defining its own list — a divergent list is how "Utilities" previously leaked into subscription data outside the fixed four.
 
 ---
 
@@ -245,7 +242,7 @@ The primary list container. Used for expense rows, subscription lists, insight r
 }
 ```
 
-Row dividers are applied on the content element, not the row: `ios-list-content` has `border-b border-border` on all but the last child. This avoids a visible bottom border on the final row.
+Row dividers are `border-b border-border` on `.ios-list-item` itself (all but the last child), full row width — deliberately edge-to-edge so the line traces the same bounds as `--row-tint`, rather than the icon-inset width of `.ios-list-content`. A border scoped to the content element used to stop short of both edges, which visibly misaligned with a tinted row's own edges.
 
 ```css
 .ios-list-item {
@@ -273,6 +270,8 @@ Row dividers are applied on the content element, not the row: `ios-list-content`
   margin-left: 12px;
 }
 ```
+
+**Per-category row tint (History only):** each row's background is `background-color: var(--row-tint, hsl(var(--card)))`, with `--row-tint` set inline per row to the expense's category color at ~4-5% opacity (`rgba(249,115,22,0.05)` for Food, etc. — see `CATEGORY_TINTS` in `History.tsx`). Deliberately sub-threshold: you can't name the color at a glance, but it lets you scan a long list by category without reading each icon. Hover still overrides it via `.ios-list-item:hover`.
 
 ### icon-btn
 
@@ -339,6 +338,8 @@ Active tab: icon gets `bg-primary text-primary-foreground shadow-md shadow-prima
 }
 .badge-negative { /* same, red-500/12 */ }
 ```
+
+A third, neutral variant appears ad hoc (not a named class) for non-semantic tags — source/type labels (Income's "Salary"/"Other"), the "Split" indicator on expense rows, "Skipped" on investments: `bg-muted text-muted-foreground` at the same pill shape/size as the two above. Use it when the badge is informational rather than good/bad.
 
 ### CategoryIcon
 

@@ -111,15 +111,26 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
         )}
       </DialogTrigger>
       
+      {/* rounded-3xl + overflow-hidden here clip corners on the fixed outer frame;
+          max-h-[85dvh] on that same frame (from the base DialogContent) is why the
+          scroll has to live on this inner wrapper instead — an element can't be
+          both overflow-hidden (for the corners) and overflow-y-auto (for content
+          taller than the frame) on itself. Without this, tall content used to
+          overflow off both the top and bottom of the frame with no way to reach
+          it, rather than clipping and letting you scroll to it. dvh (not vh):
+          on real mobile Safari, vh is sized against the browser chrome fully
+          collapsed, so 85vh can still exceed what's actually visible when the
+          address bar is showing — dvh tracks the real visible viewport. */}
       <DialogContent className="sm:max-w-md rounded-3xl p-0 overflow-hidden border-border/50 bg-background/95 backdrop-blur-xl">
+        <div className="max-h-[85dvh] overflow-y-auto">
         <DialogHeader className="px-6 pt-6 pb-2">
           <DialogTitle className="text-center text-xl font-semibold">
             {expense ? "Edit Expense" : "New Expense"}
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-6">
-          <div className="relative flex justify-center py-4">
+        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-5">
+          <div className="relative flex justify-center py-2">
             <div className="flex items-baseline justify-center max-w-[80%]">
               <span className="text-3xl font-medium text-muted-foreground mr-1 translate-y-[-2px]">₹</span>
               <input
@@ -252,6 +263,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
             )}
           </Button>
         </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

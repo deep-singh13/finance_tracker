@@ -5,11 +5,10 @@ import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { CategoryIcon } from "@/components/CategoryIcon";
+import { CategoryIcon, CATEGORIES } from "@/components/CategoryIcon";
 import type { Subscription } from "@shared/schema";
 import { formatPaise, toPaise, toRupees } from "@shared/paise";
-
-const CATEGORIES = ["Entertainment", "Utilities", "Health", "Food", "Shopping", "Transport", "Travel", "Other"];
+import { SwipeableRow } from "@/components/SwipeableRow";
 
 const fmt = (paise: number) => formatPaise(paise);
 
@@ -74,7 +73,7 @@ function SubscriptionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="bg-card rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl border border-border/50">
+      <div className="bg-card rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto p-6 space-y-4 shadow-xl border border-border/50">
         <h2 className="text-lg font-bold">{initial ? "Edit Subscription" : "Add Subscription"}</h2>
 
         <div className="space-y-3">
@@ -216,7 +215,15 @@ export default function Subscriptions() {
         ) : (
           <div className="ios-list">
             {subs.map(sub => (
-              <div key={sub.id} className="ios-list-item group">
+              <SwipeableRow
+                key={sub.id}
+                id={sub.id}
+                className="ios-list-item group"
+                actions={[
+                  { label: "Edit subscription", icon: Pencil, variant: "edit", onClick: () => setModal(sub) },
+                  { label: "Delete subscription", icon: Trash2, variant: "delete", onClick: () => deleteMutation.mutate(sub.id) },
+                ]}
+              >
                 <CategoryIcon category={sub.category} size="md" />
 
                 <div className="ios-list-content">
@@ -243,7 +250,9 @@ export default function Subscriptions() {
                       <span className={`block w-5 h-5 bg-white rounded-full shadow-sm mx-0.5 transition-transform ${sub.isActive ? "translate-x-5" : "translate-x-0"}`} />
                     </button>
 
-                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Desktop-only in layout too: swipe reveals these on mobile
+                        instead, so they don't need to reserve space here. */}
+                    <div className="hidden md:flex items-center md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => setModal(sub)} className="p-1.5 text-muted-foreground hover:bg-muted/20 rounded-full">
                         <Pencil className="w-4 h-4" />
                       </button>
@@ -253,7 +262,7 @@ export default function Subscriptions() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </SwipeableRow>
             ))}
           </div>
         )}

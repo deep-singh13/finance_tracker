@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { Investment } from "@shared/schema";
 import { formatPaise, toPaise, toRupees } from "@shared/paise";
 import { sipTotalForMonth } from "@shared/month";
+import { SwipeableRow } from "@/components/SwipeableRow";
 
 const INVESTMENT_TYPES = ["SIP", "Lump Sum", "FD", "PPF", "NPS", "Other"];
 
@@ -84,7 +85,7 @@ function InvestmentModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4">
-      <div className="bg-card rounded-2xl w-full max-w-md p-6 space-y-4 shadow-xl border border-border/50">
+      <div className="bg-card rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto p-6 space-y-4 shadow-xl border border-border/50">
         <h2 className="text-lg font-bold">{initial ? "Edit Investment" : "Add Investment"}</h2>
 
         <div className="space-y-3">
@@ -252,10 +253,18 @@ export default function Investments() {
               const isPending = skipMutation.isPending && (skipMutation.variables as any)?.inv?.id === inv.id;
 
               return (
-                <div key={inv.id} className="ios-list-item group">
+                <SwipeableRow
+                  key={inv.id}
+                  id={inv.id}
+                  className="ios-list-item group"
+                  actions={[
+                    { label: "Edit investment", icon: Pencil, variant: "edit", onClick: () => setModal(inv) },
+                    { label: "Delete investment", icon: Trash2, variant: "delete", onClick: () => deleteMutation.mutate(inv.id) },
+                  ]}
+                >
                   <div className="flex flex-col justify-center flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[16px] font-medium truncate ${isSkipped ? "text-muted-foreground" : ""}`}>
+                      <span className={`text-[16px] font-medium break-words ${isSkipped ? "text-muted-foreground" : ""}`} title={inv.name}>
                         {inv.name}
                       </span>
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${TYPE_COLORS[inv.type] ?? TYPE_COLORS.Other}`}>
@@ -304,8 +313,10 @@ export default function Investments() {
                         {isSkipped ? `Unskip` : `Skip ${currentMonthShort}`}
                       </button>
                     )}
-                    {/* Edit/delete — hover only */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Edit/delete — hover only, and desktop-only in layout too: on
+                        touch there's no hover to reveal it, so keeping it in flow
+                        left dead space to the right of the Skip pill. */}
+                    <div className="hidden md:flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => setModal(inv)}
                         className="p-2 text-muted-foreground hover:bg-muted/20 rounded-full">
                         <Pencil className="w-4 h-4" />
@@ -316,7 +327,7 @@ export default function Investments() {
                       </button>
                     </div>
                   </div>
-                </div>
+                </SwipeableRow>
               );
             })}
           </div>

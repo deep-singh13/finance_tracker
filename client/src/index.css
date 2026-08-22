@@ -220,11 +220,19 @@
 
   /* Only hover on pointer devices — prevents touch false positives.
      --row-tint can be set per-row to apply a category or semantic surface tint;
-     falls back to the card surface so rows without a tint look normal. */
+     falls back to transparent so rows without a tint show plain card color.
+
+     background-color stays opaque card color always; the tint layers on top
+     via background-image (a solid-color gradient renders as a translucent
+     wash above background-color). --row-tint is only ~5% opaque by design
+     (see History.tsx), so if it were the element's only background — as it
+     used to be — a SwipeableRow's drawer sitting behind this row on mobile
+     would show straight through it at rest, not just while swiped open. */
   .ios-list-item {
     @apply flex items-center justify-between px-4 py-3 cursor-pointer;
-    background-color: var(--row-tint, hsl(var(--card)));
-    transition: background-color 150ms var(--ease-out), transform 120ms var(--ease-out);
+    background-color: hsl(var(--card));
+    background-image: linear-gradient(var(--row-tint, transparent), var(--row-tint, transparent));
+    transition: background-color 150ms var(--ease-out), background-image 150ms var(--ease-out), transform 120ms var(--ease-out);
   }
   @media (hover: hover) and (pointer: fine) {
     .ios-list-item:hover { background-color: hsl(var(--muted) / 0.5); }
@@ -233,9 +241,25 @@
     transform: scale(0.99);
   }
 
-  .ios-list-item:not(:last-child) > .ios-list-content {
+  /* Border lives on the row, not the content — it has to share the row's own
+     edge-to-edge bounds so it lines up with --row-tint (also set on the row).
+     A border on .ios-list-content stopped short of both edges (inset by the
+     icon gap on the left, by padding on the right), so on a tinted row the
+     divider visibly cut across the middle of the color block instead of
+     tracing its boundary. */
+  .ios-list-item:not(:last-child) {
     @apply border-b border-border;
   }
+
+  /* SwipeableRow (mobile) wraps .ios-list-item in a clipping shell (relative +
+     overflow-hidden, applied via Tailwind classes on the shell itself), so
+     the item is no longer a direct child of .ios-list — the rule above can
+     never see it as "not last child" since it's always the sole child of its
+     own shell. The shell takes over that same divider responsibility instead. */
+  .ios-list > .swipe-row-shell:not(:last-child) {
+    @apply border-b border-border;
+  }
+
   .ios-list-content {
     @apply flex-1 flex items-center justify-between py-1 ml-3;
   }

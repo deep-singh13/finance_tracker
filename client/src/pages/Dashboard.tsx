@@ -6,6 +6,7 @@ import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
 import { ExpenseModal } from "@/components/ExpenseModal";
+import { CATEGORY_HEX, DEFAULT_CATEGORY_HEX } from "@/components/CategoryIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GmailSyncModal } from "@/components/GmailSyncModal";
 import { MonthSwitcher } from "@/components/MonthSwitcher";
@@ -13,6 +14,17 @@ import Aurora from "@/components/Aurora";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
 import { monthSummary, netAmount } from "@shared/month";
@@ -96,7 +108,6 @@ function calculateMonthlyTotals(expenses: ExpenseResponse[], endMonth: Date) {
   });
 }
 
-const CHART_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4"];
 
 export default function Dashboard() {
   const [isPrivate, setIsPrivate] = useState(false);
@@ -251,7 +262,6 @@ export default function Dashboard() {
               >
                 <Mail className="w-4 h-4" />
               </button>
-              <ThemeToggle variant="hero" />
               <ExpenseModal>
                 <button
                   className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
@@ -263,17 +273,35 @@ export default function Dashboard() {
                   <Plus className="w-4 h-4" />
                 </button>
               </ExpenseModal>
-              {/* Lock lives here rather than the tab bar — seven tabs already fill it */}
-              <button
-                onClick={logout}
-                className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
-                style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
-                onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.25)"}
-                onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.15)"}
-                aria-label="Lock / Logout"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              <ThemeToggle variant="hero" />
+              {/* Lock lives here rather than the tab bar — seven tabs already fill it.
+                  Confirms before firing: this row is tightly packed at 320px (five icons,
+                  ~5px gaps), so a bare click risked an accidental logout on a mis-tap. */}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    className="icon-btn w-9 h-9 bg-white/15 text-white border border-white/20"
+                    style={{ transition: "background-color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
+                    onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.25)"}
+                    onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(255,255,255,0.15)"}
+                    aria-label="Lock / Logout"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Log out?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You'll need your 4-digit PIN to sign back in.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={logout}>Log out</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
             <GmailSyncModal open={gmailOpen} onClose={() => setGmailOpen(false)} />
           </div>
@@ -370,12 +398,12 @@ export default function Dashboard() {
                 <div className="px-5 pt-4 pb-3 border-b border-border/40">
                   <p className="section-label">Net Cash Flow — {monthLabel}</p>
                 </div>
-                <div className="px-5 py-5 flex items-center justify-between">
+                <div className="px-5 py-4 flex items-center justify-between gap-4">
                   <div>
                     <div className="flex items-baseline gap-1">
-                      {!isPrivate && <span className="text-[14px] text-muted-foreground">₹</span>}
+                      {!isPrivate && <span className="text-[13px] text-muted-foreground">₹</span>}
                       <span className={cn(
-                        "text-[32px] font-bold tracking-tight",
+                        "text-[26px] font-bold tracking-tight",
                         netCashFlow >= 0 ? "text-emerald-500" : "text-red-500"
                       )}>
                         {isPrivate ? "••••••" : `${netCashFlow >= 0 ? "+" : "-"}${fmt(Math.abs(netCashFlow))}`}
@@ -390,32 +418,51 @@ export default function Dashboard() {
                       </span>
                     )}
                   </div>
-                  <div className="text-right space-y-1.5 text-[12px] text-muted-foreground">
-                    <div className="flex items-center justify-end gap-2">
+                  {/* Grid, not stacked flex rows: the label column auto-sizes to fit
+                      "Split Received" (the longest label) on one line, so every row's
+                      label starts flush left and every value ends up flush right in
+                      its own column, with real gap between them — instead of each row
+                      shrink-wrapping to hug the right edge at whatever width its own
+                      label happened to need. */}
+                  <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-1.5 text-[12px] text-muted-foreground">
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      Income <span className="font-semibold text-emerald-600 dark:text-emerald-400">{isPrivate ? "••••••" : `+₹${fmt(monthlyIncomeTotal)}`}</span>
-                    </div>
-                    <div className="flex items-center justify-end gap-2">
+                      Income
+                    </span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-right whitespace-nowrap">{isPrivate ? "••••••" : `+₹${fmt(monthlyIncomeTotal)}`}</span>
+
+                    <span className="flex items-center gap-1.5 whitespace-nowrap">
                       <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
-                      Expenses <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthTotal)}`}</span>
-                    </div>
+                      Expenses
+                    </span>
+                    <span className="font-semibold text-foreground text-right whitespace-nowrap">{isPrivate ? "••••••" : `−₹${fmt(monthTotal)}`}</span>
+
                     {monthlySIPTotal > 0 && (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
-                        Investments <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthlySIPTotal)}`}</span>
-                      </div>
+                      <>
+                        <span className="flex items-center gap-1.5 whitespace-nowrap">
+                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                          Investments
+                        </span>
+                        <span className="font-semibold text-foreground text-right whitespace-nowrap">{isPrivate ? "••••••" : `−₹${fmt(monthlySIPTotal)}`}</span>
+                      </>
                     )}
                     {monthlyEmiTotal > 0 && (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
-                        EMIs <span className="font-semibold text-foreground">{isPrivate ? "••••••" : `−₹${fmt(monthlyEmiTotal)}`}</span>
-                      </div>
+                      <>
+                        <span className="flex items-center gap-1.5 whitespace-nowrap">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                          EMIs
+                        </span>
+                        <span className="font-semibold text-foreground text-right whitespace-nowrap">{isPrivate ? "••••••" : `−₹${fmt(monthlyEmiTotal)}`}</span>
+                      </>
                     )}
                     {monthlySplitTotal > 0 && (
-                      <div className="flex items-center justify-end gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
-                        Split Received <span className="font-semibold text-cyan-600 dark:text-cyan-400">{isPrivate ? "••••••" : `+₹${fmt(monthlySplitTotal)}`}</span>
-                      </div>
+                      <>
+                        <span className="flex items-center gap-1.5 whitespace-nowrap">
+                          <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 shrink-0" />
+                          Split Received
+                        </span>
+                        <span className="font-semibold text-cyan-600 dark:text-cyan-400 text-right whitespace-nowrap">{isPrivate ? "••••••" : `+₹${fmt(monthlySplitTotal)}`}</span>
+                      </>
                     )}
                   </div>
                 </div>
@@ -444,7 +491,7 @@ export default function Dashboard() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    placeholder="Set monthly budget (₹)"
+                    placeholder={budget > 0 ? `Current: ₹${formatPaise(budget, { symbol: false, decimals: "auto" })}` : "Set monthly budget (₹)"}
                     value={newBudget}
                     onChange={e => setNewBudget(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && handleSetBudget()}
@@ -541,8 +588,8 @@ export default function Dashboard() {
                           paddingAngle={4}
                           dataKey="value"
                         >
-                          {categoryData.map((_, i) => (
-                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} stroke="transparent" />
+                          {categoryData.map((entry, i) => (
+                            <Cell key={i} fill={CATEGORY_HEX[entry.name] ?? DEFAULT_CATEGORY_HEX} stroke="transparent" />
                           ))}
                         </Pie>
                         <Tooltip

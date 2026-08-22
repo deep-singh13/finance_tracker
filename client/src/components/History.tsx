@@ -7,10 +7,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ExpenseModal } from "./ExpenseModal";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Search, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatPaise, toPaiseOr, toRupees } from "@shared/paise";
 import { netAmount } from "@shared/month";
+import { SwipeableRow } from "./SwipeableRow";
 
 const formatAmount = (paise: number) => formatPaise(paise);
 
@@ -105,7 +106,7 @@ const CATEGORY_TINTS: Record<string, string> = {
   Food:          "rgba(249,115,22,0.05)",
   Entertainment: "rgba(168,85,247,0.05)",
   Amenities:     "rgba(59,130,246,0.04)",
-  Miscellaneous: "rgba(113,113,122,0.04)",
+  Miscellaneous: "rgba(20,184,166,0.05)",
 };
 
 export function History() {
@@ -147,9 +148,9 @@ export function History() {
             <Skeleton className="h-6 w-32 bg-muted/60 rounded-full" />
             <div className="ios-list">
               {[1, 2].map((j) => (
-                <div key={j} className="ios-list-item">
+                <div key={j} className="ios-list-item border-b-0">
                   <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
-                  <div className="ios-list-content border-b-0">
+                  <div className="ios-list-content">
                     <div className="space-y-2">
                       <Skeleton className="h-4 w-40" />
                       <Skeleton className="h-3 w-24" />
@@ -169,9 +170,22 @@ export function History() {
     <div className="min-h-screen bg-background text-foreground pb-24">
       <header className="px-5 pt-12 pb-4 sticky top-0 bg-background/80 backdrop-blur-xl z-10 border-b border-transparent transition-all">
         <div className="max-w-2xl mx-auto flex flex-col gap-4">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
-            History
-          </h1>
+          <div className="flex justify-between items-center">
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+              History
+            </h1>
+            {/* Matches the circular "+" used on every other tab, rather than the
+                full-width text button ExpenseModal falls back to without children. */}
+            <ExpenseModal>
+              <button
+                type="button"
+                className="bg-primary text-primary-foreground p-2 rounded-full shadow-md hover:bg-primary/90 transition-transform active:scale-95"
+                aria-label="Add expense"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </ExpenseModal>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -185,11 +199,15 @@ export function History() {
       </header>
 
       <main className="px-4 max-w-2xl mx-auto mt-6">
+        {/* Controlled purely by row clicks — children is a no-op trigger so the
+            modal never renders its own default "Add Expense" button in the flow. */}
         <ExpenseModal
           expense={editingExpense || undefined}
           open={!!editingExpense}
           onOpenChange={(open) => !open && setEditingExpense(null)}
-        />
+        >
+          <span className="hidden" aria-hidden="true" />
+        </ExpenseModal>
 
         {months.map((monthDate) => {
           const monthExpenses = filteredExpenses.filter(e => isSameMonth(parseISO(e.date), monthDate));
@@ -211,11 +229,15 @@ export function History() {
                 {monthExpenses
                   .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime())
                   .map((expense) => (
-                    <div
+                    <SwipeableRow
                       key={expense.id}
+                      id={expense.id}
                       className={`ios-list-item group cursor-pointer${deletingIds.has(expense.id) ? " row-exiting" : ""}`}
                       style={{ '--row-tint': CATEGORY_TINTS[expense.category] } as React.CSSProperties}
-                      onClick={() => setEditingExpense(expense)}
+                      onRowClick={() => setEditingExpense(expense)}
+                      actions={[
+                        { label: "Delete expense", icon: Trash2, variant: "delete", onClick: (e) => handleDelete(e, expense.id) },
+                      ]}
                     >
                       <CategoryIcon category={expense.category} size="md" />
 
@@ -241,10 +263,12 @@ export function History() {
                           <span className="text-[16px] font-bold text-foreground tracking-tight">
                             {formatAmount(expense.amount)}
                           </span>
+                          {/* Desktop-only in layout too: swipe reveals delete on
+                              mobile instead, so it doesn't need to reserve space here. */}
                           <button
                             onClick={(e) => handleDelete(e, expense.id)}
                             disabled={deleteExpense.isPending}
-                            className="icon-btn w-8 h-8 opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
+                            className="icon-btn w-8 h-8 !hidden md:!flex md:opacity-0 md:group-hover:opacity-100 text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
                             style={{ transition: "opacity 150ms var(--ease-out), background-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 120ms var(--ease-out)" }}
                             aria-label="Delete expense"
                           >
@@ -252,7 +276,7 @@ export function History() {
                           </button>
                         </div>
                       </div>
-                    </div>
+                    </SwipeableRow>
                   ))}
               </div>
             </div>
