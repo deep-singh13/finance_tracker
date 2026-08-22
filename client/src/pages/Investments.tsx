@@ -84,7 +84,7 @@ function InvestmentModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm px-4 pb-24 sm:pb-4">
       <div className="bg-card rounded-2xl w-full max-w-md max-h-[85dvh] overflow-y-auto p-6 space-y-4 shadow-xl border border-border/50">
         <h2 className="text-lg font-bold">{initial ? "Edit Investment" : "Add Investment"}</h2>
 

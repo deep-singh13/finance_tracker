@@ -127,7 +127,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
   const credits = transactions.filter(t => t.type === "credit");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={state === "committing" ? undefined : onClose} />
 
       <div className="relative bg-background rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg flex flex-col overflow-hidden shadow-2xl"
