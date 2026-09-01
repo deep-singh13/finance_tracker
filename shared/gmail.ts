@@ -19,6 +19,7 @@ import { z } from "zod";
 const amount = z.number().positive();
 const description = z.string().min(1);
 const category = z.string().min(1);
+const subcategory = z.string().min(1);
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const incomeSource = z.enum(["salary", "freelance", "investment", "other"]);
 const splitAmount = z.number().min(0);
@@ -29,6 +30,7 @@ export const parsedTransactionSchema = z.object({
   amount,                                        // paise
   description,
   category: category.default("Miscellaneous"),   // debits
+  subcategory: subcategory.optional(),            // omitted when no confident keyword match
   date: dateString,
   externalId: z.string().min(1),                 // Gmail message ID, for dedupe
   type: z.enum(["debit", "credit"]).default("debit"),
@@ -57,6 +59,7 @@ export const stagedEditSchema = z.object({
   amount: amount.optional(),
   description: description.optional(),
   category: category.optional(),
+  subcategory: subcategory.nullable().optional(), // null clears it, matching cardLast4
   date: dateString.optional(),
   incomeSource: incomeSource.optional(),
   splitAmount: splitAmount.optional(),

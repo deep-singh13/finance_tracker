@@ -64,6 +64,7 @@ export async function registerRoutes(
           amount: tx.amount,
           description: tx.description,
           category: tx.category,
+          subcategory: tx.subcategory ?? null,
           date: tx.date,
           source: "gmail",
           externalId: tx.externalId,
@@ -184,6 +185,7 @@ export async function registerRoutes(
     if (parsed.incomeSource !== undefined) staged[idx].incomeSource = parsed.incomeSource;
     if (parsed.splitAmount !== undefined) staged[idx].splitAmount = parsed.splitAmount;
     if (parsed.cardLast4 !== undefined) staged[idx].cardLast4 = parsed.cardLast4 ?? undefined;
+    if (parsed.subcategory !== undefined) staged[idx].subcategory = parsed.subcategory ?? undefined;
     res.json(staged[idx]);
   });
 
@@ -220,6 +222,7 @@ export async function registerRoutes(
             amount: tx.amount,
             description: tx.description,
             category: tx.category,
+            subcategory: tx.subcategory ?? null,
             date: tx.date,
             source: "gmail",
             externalId: tx.externalId,

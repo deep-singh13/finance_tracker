@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCreateExpense, useUpdateExpense } from "@/hooks/use-expenses";
-import { CATEGORIES, CategoryIcon } from "./CategoryIcon";
+import { CATEGORIES, CategoryIcon, SUBCATEGORIES } from "./CategoryIcon";
 import { type ExpenseResponse } from "@shared/routes";
 import { cn } from "@/lib/utils";
 import { toRupees } from "@shared/paise";
@@ -25,6 +25,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
+  const [subcategory, setSubcategory] = useState<string | null>(null);
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
@@ -38,6 +39,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
       setAmount(String(toRupees(expense.amount)));
       setDescription(expense.description);
       setCategory(expense.category);
+      setSubcategory(expense.subcategory ?? null);
       setDate(expense.date);
       setTags(expense.tags ?? []);
       setTagInput("");
@@ -46,6 +48,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
       setAmount("");
       setDescription("");
       setCategory(CATEGORIES[0]);
+      setSubcategory(null);
       setDate(format(new Date(), "yyyy-MM-dd"));
       setTags([]);
       setTagInput("");
@@ -67,7 +70,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
     e.preventDefault();
     if (!amount || !description) return;
 
-    const uiData = { amount, description, category, date, tags, splitAmount };
+    const uiData = { amount, description, category, subcategory, date, tags, splitAmount };
 
     if (expense) {
       updateMutation.mutate(
@@ -83,6 +86,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
             setAmount("");
             setDescription("");
             setCategory(CATEGORIES[0]);
+            setSubcategory(null);
             setDate(format(new Date(), "yyyy-MM-dd"));
             setTags([]);
             setTagInput("");
@@ -195,7 +199,7 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => setCategory(cat)}
+                  onClick={() => { setCategory(cat); setSubcategory(null); }}
                   className={cn(
                     "flex flex-col items-center justify-center p-3 rounded-2xl border transition-all duration-200",
                     category === cat 
@@ -214,6 +218,31 @@ export function ExpenseModal({ children, expense, open: externalOpen, onOpenChan
               ))}
             </div>
           </div>
+
+          {SUBCATEGORIES[category]?.length > 0 && (
+            <div>
+              <label className="block text-[13px] uppercase tracking-wider font-semibold text-muted-foreground mb-3 px-2">
+                Subcategory
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {SUBCATEGORIES[category].map(sub => (
+                  <button
+                    key={sub}
+                    type="button"
+                    onClick={() => setSubcategory(prev => prev === sub ? null : sub)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-[12px] font-medium transition-colors",
+                      subcategory === sub
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground hover:bg-muted/70"
+                    )}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-[13px] uppercase tracking-wider font-semibold text-muted-foreground mb-3 px-2">

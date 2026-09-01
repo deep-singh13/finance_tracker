@@ -7,6 +7,7 @@ export const expenses = pgTable("expenses", {
   amount: integer("amount").notNull(), // Stored in cents
   description: text("description").notNull(),
   category: text("category").notNull(),
+  subcategory: text("subcategory"), // optional: e.g. "Cafe/Restaurant", "Quick Commerce"; Entertainment has none
   date: date("date").notNull(), // YYYY-MM-DD
   source: text("source").default("manual").notNull(), // 'manual' | 'gmail' | 'subscription'
   externalId: text("external_id"), // Gmail message ID for deduplication

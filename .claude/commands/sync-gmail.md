@@ -70,6 +70,7 @@ Trxn. not done by you? Report at https://sbicard.com/Dispute
   - `Rs 10000.00` → `1000000`
 - **Description** — always `"Cash Withdrawal"`
 - **Category** — always `Miscellaneous`
+- **Subcategory** — omit (no confident mapping; ATM withdrawal is not one of the keyword rules)
 - **Date** — message `date` field → `YYYY-MM-DD`
 - **externalId** — message `id`
 - **cardLast4** — omit (this is a bank account, not a credit card)
@@ -105,15 +106,44 @@ Only title-case a merchant name **if it is entirely uppercase**. Otherwise leave
 - `COSMO PROFILE SALONS` → `Cosmo Profile Salons`
 - `NationalHighwaysA` → `NationalHighwaysA` (already mixed case — do **not** mangle it to `Nationalhighwaysa`)
 
+### Merchant name overrides
+
+Apply category classification first using the original merchant/VPA name (so the keyword rules below still match), then replace the description with these overrides for the final staged value:
+
+- Merchant name contains `daalchini` (any spelling variant, e.g. `Daalchini`, `Dalchini`) → description `Office Vending Machine`. Category stays `Food`, subcategory `Cafe/Restaurant` (matched via the `daalchini` keyword before the override).
+- Merchant name is `Mishra pan shop` (case-insensitive) → description `C`.
+- Merchant name is `Balavendra Singh` (case-insensitive, any spelling variant) → description `Office Parking`. Category `Amenities`, subcategory `Car Expenses` (this is a parking expense, matched via the `parking` keyword — not the default `Miscellaneous`).
+- Merchant name is `Blinkit Commerce Private Limited` (case-insensitive) → description `Blinkit`. Category `Miscellaneous`, subcategory `Quick Commerce` (reclassified — matched via the `blinkit` keyword, which lives under Miscellaneous now, not Food).
+- Merchant name is `Umesh general store` (case-insensitive) → description `C`.
+- Merchant name is `Chandan Kumar` (case-insensitive) → description `C`.
+- Merchant name is `Umesh Parsad` (case-insensitive, any spelling variant) → description `C`.
+
 ### Category
 
 Map to one of exactly these 4 values (case-sensitive): `Food`, `Entertainment`, `Amenities`, `Miscellaneous`
 
 Keyword rules (case-insensitive on the merchant name):
-- **Food**: swiggy, zomato, blinkit, mcdonald, pizza, domino, restaurant, cafe, food, biryani, burger, kfc, starbucks, daalchini
+- **Food**: swiggy, zomato, mcdonald, pizza, domino, restaurant, cafe, food, biryani, burger, kfc, starbucks, daalchini
 - **Entertainment**: netflix, hotstar, spotify, bookmyshow, prime video, apple services, youtube, disney, movie, game
 - **Amenities**: jio, airtel, bsnl, internet, broadband, electricity, gas, recharge, dth, water, bill, hospital, clinic, doctor, pharmacy, medical, apollo, medplus, gym, salon, ola, uber, rapido, metro, petrol, fuel, parking, nationalhighways, fastag, toll
-- **Miscellaneous**: everything else (amazon, flipkart, shopping, hotel, flight, irctc, etc.)
+- **Miscellaneous**: blinkit, zepto, instamart, swiggy instamart (quick commerce), amazon, flipkart, shopping, hotel, flight, irctc, and everything else not matched above
+
+### Subcategory
+
+Entertainment never gets a subcategory. For the other three categories, set an optional `subcategory`
+field — but only when the merchant name confidently matches one of these keyword rules (case-insensitive):
+
+- Food > **Home Delivery**: zomato, swiggy (not "swiggy instamart" — that's quick commerce, below)
+- Food > **Cafe/Restaurant**: mcdonald, pizza, domino, restaurant, cafe, biryani, burger, kfc, starbucks, daalchini
+- Miscellaneous > **Quick Commerce**: blinkit, zepto, instamart, swiggy instamart
+- Amenities > **Subscriptions**: jio, airtel, bsnl, internet, broadband, dth, recharge
+- Amenities > **Car Expenses**: petrol, fuel, parking, nationalhighways, fastag, toll
+- Amenities > **Self-Care**: gym, salon
+
+If the merchant doesn't confidently match one of the rules above — even ones that matched a *category*
+keyword (e.g. electricity, gas, water, bill, hospital, clinic, doctor, pharmacy, medical, apollo, medplus,
+ola, uber, rapido, metro, or anything landing in Miscellaneous's "everything else") — omit the
+`subcategory` field entirely. Do not guess. Leave it for the user to fill in during review.
 
 ### Universal skip rules
 
@@ -124,6 +154,7 @@ Skip a message if **any** of these hold:
 - Subject matches `Toll Paid Rs.X from FASTag Wallet` AND amount ≤ Rs.100 (10000 paise)
 - Account balance / e-mandate / forex markup fee alerts
 - FASTag recharge success notifications
+- Merchant/narration contains `anthropic` or `claude` (e.g. `ANTHROPIC* CLAUDE SUB`, `CLAUDE.AI SUBSCRIPTION`) — the Claude subscription is already tracked in the app's Subscriptions section, so staging it would double-count
 
 ### ⚠️ Credit card bill payments — skip these
 
@@ -147,13 +178,16 @@ X-Sync-Key: $SYNC_API_KEY   ← only if SYNC_API_KEY is set
 
 {
   "transactions": [
-    { "amount": 35358, "description": "Zomato", "category": "Food", "date": "2026-04-14", "externalId": "19d8a285d3b1bd18" },
-    { "amount": 123456, "description": "NationalHighwaysA", "category": "Amenities", "date": "2026-08-08", "externalId": "19d8a285d3b1bd19", "cardLast4": "4321" }
+    { "amount": 35358, "description": "Zomato", "category": "Food", "subcategory": "Home Delivery", "date": "2026-04-14", "externalId": "19d8a285d3b1bd18" },
+    { "amount": 123456, "description": "NationalHighwaysA", "category": "Amenities", "subcategory": "Car Expenses", "date": "2026-08-08", "externalId": "19d8a285d3b1bd19", "cardLast4": "4321" },
+    { "amount": 89900, "description": "Amazon", "category": "Miscellaneous", "date": "2026-08-09", "externalId": "19d8a285d3b1bd20" }
   ]
 }
 ```
 
 `cardLast4` is optional and must be exactly 4 digits when present. At commit time the server looks it up against the `cards` table and links the expense to that card. If no card with those digits exists yet, the transaction still imports — just unlinked — so add the card in the app's **Cards** tab first for it to be routed.
+
+`subcategory` is optional too — omit it entirely rather than guessing when no keyword rule confidently applies (see the third example above, an Amazon purchase with no confident subcategory match).
 
 The server automatically filters out transactions already in the database.
 

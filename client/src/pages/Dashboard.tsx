@@ -6,7 +6,7 @@ import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
 import { useQuery } from "@tanstack/react-query";
 import { ExpenseModal } from "@/components/ExpenseModal";
-import { CATEGORY_HEX, DEFAULT_CATEGORY_HEX } from "@/components/CategoryIcon";
+import { CATEGORY_HEX, DEFAULT_CATEGORY_HEX, SUBCATEGORIES, SUBCATEGORY_HEX } from "@/components/CategoryIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { GmailSyncModal } from "@/components/GmailSyncModal";
 import { MonthSwitcher } from "@/components/MonthSwitcher";
@@ -132,6 +132,11 @@ export default function Dashboard() {
   const isCurrentMonth = isSameMonth(selectedMonth, new Date());
   const monthLabel = format(selectedMonth, "MMMM");
 
+  // Category Breakdown pie: clicking a slice drills into its subcategory split.
+  // Reset on month change so a drill-down doesn't linger across an unrelated switch.
+  const [drilldownCategory, setDrilldownCategory] = useState<string | null>(null);
+  useEffect(() => setDrilldownCategory(null), [selectedMonthStr]);
+
   const { data: budgetData } = useBudget(selectedMonthStr);
   const setBudgetMutation = useSetBudget();
   const [newBudget, setNewBudget] = useState("");
@@ -176,6 +181,19 @@ export default function Dashboard() {
       monthlyTrend: calculateMonthlyTotals(expenses, selectedMonth),
     };
   }, [expenses, selectedMonth, summary]);
+
+  const subcategoryData = useMemo(() => {
+    if (!expenses || !drilldownCategory) return [];
+    const totals: Record<string, number> = {};
+    expenses.forEach(exp => {
+      if (format(parseISO(exp.date), "yyyy-MM") !== selectedMonthStr || exp.category !== drilldownCategory) return;
+      const key = exp.subcategory ?? "Uncategorized";
+      totals[key] = (totals[key] || 0) + netAmount(exp);
+    });
+    return Object.entries(totals)
+      .map(([name, total]) => ({ name, value: toRupees(total) }))
+      .sort((a, b) => b.value - a.value);
+  }, [expenses, selectedMonthStr, drilldownCategory]);
 
   const upcomingSubscriptions = useMemo(() => {
     if (!subscriptions) return [];
@@ -575,21 +593,39 @@ export default function Dashboard() {
               <>
                 {/* Category breakdown */}
                 <div className="bg-card rounded-2xl border border-border/50 shadow-sm">
-                  <div className="px-5 pt-4 pb-3 border-b border-border/40">
-                    <p className="section-label">Category Breakdown — {monthLabel}</p>
+                  <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center justify-between">
+                    <p className="section-label">
+                      {drilldownCategory ? `${drilldownCategory} Breakdown` : "Category Breakdown"} — {monthLabel}
+                    </p>
+                    {drilldownCategory && (
+                      <button type="button" onClick={() => setDrilldownCategory(null)}
+                        className="text-[12px] font-medium text-primary hover:underline">
+                        ← Back
+                      </button>
+                    )}
                   </div>
                   <div className="px-2 py-4 h-[260px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                         <Pie
-                          data={categoryData}
+                          data={drilldownCategory ? subcategoryData : categoryData}
                           cx="50%" cy="50%"
                           innerRadius={64} outerRadius={88}
                           paddingAngle={4}
                           dataKey="value"
+                          onClick={!drilldownCategory ? (entry: any) => {
+                            if (SUBCATEGORIES[entry.name]?.length > 0) setDrilldownCategory(entry.name);
+                          } : undefined}
+                          cursor={!drilldownCategory ? "pointer" : "default"}
                         >
-                          {categoryData.map((entry, i) => (
-                            <Cell key={i} fill={CATEGORY_HEX[entry.name] ?? DEFAULT_CATEGORY_HEX} stroke="transparent" />
+                          {(drilldownCategory ? subcategoryData : categoryData).map((entry, i) => (
+                            <Cell key={i} fill={
+                              drilldownCategory
+                                ? (entry.name === "Uncategorized"
+                                    ? (CATEGORY_HEX[drilldownCategory] ?? DEFAULT_CATEGORY_HEX)
+                                    : (SUBCATEGORY_HEX[drilldownCategory]?.[entry.name] ?? DEFAULT_CATEGORY_HEX))
+                                : (CATEGORY_HEX[entry.name] ?? DEFAULT_CATEGORY_HEX)
+                            } stroke="transparent" />
                           ))}
                         </Pie>
                         <Tooltip

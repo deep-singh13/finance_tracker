@@ -120,7 +120,8 @@ export function History() {
     if (!expenses) return [];
     return expenses.filter(exp =>
       exp.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      exp.category.toLowerCase().includes(searchQuery.toLowerCase())
+      exp.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      exp.subcategory?.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [expenses, searchQuery]);
 
@@ -249,6 +250,7 @@ export function History() {
                           <div className="flex items-center flex-wrap gap-1.5 mt-0.5">
                             <span className="text-[13px] text-muted-foreground">
                               {format(parseISO(expense.date), "MMM d")} • {expense.category}
+                              {expense.subcategory ? ` · ${expense.subcategory}` : ""}
                             </span>
                             {expense.tags?.map(tag => (
                               <span key={tag} className="text-[11px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">

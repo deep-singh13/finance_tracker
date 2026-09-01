@@ -79,3 +79,18 @@ export function CategoryIcon({ category, className, size = "md" }: CategoryIconP
 }
 
 export const CATEGORIES = Object.keys(CATEGORY_CONFIG);
+
+export const SUBCATEGORIES: Record<string, string[]> = {
+  Food: ["Cafe/Restaurant", "Home Delivery"],
+  Amenities: ["Subscriptions", "Car Expenses", "Self-Care", "Electronics"],
+  Miscellaneous: ["Gifts", "Leisure", "Quick Commerce", "Travel"],
+};
+
+// Shades of each parent category's hue, for the Dashboard drill-down pie only.
+// "Uncategorized" (an expense in this category with no subcategory set) uses
+// the parent's own CATEGORY_HEX value so it reads as "the category, unsplit."
+export const SUBCATEGORY_HEX: Record<string, Record<string, string>> = {
+  Food: { "Cafe/Restaurant": "#FB923C", "Home Delivery": "#EA580C" },
+  Amenities: { Subscriptions: "#60A5FA", "Car Expenses": "#3B82F6", "Self-Care": "#2563EB", Electronics: "#1D4ED8" },
+  Miscellaneous: { Gifts: "#5EEAD4", Leisure: "#2DD4BF", "Quick Commerce": "#14B8A6", Travel: "#0D9488" },
+};

@@ -17,6 +17,7 @@ export interface UIExpenseInput {
   amount: string;
   description: string;
   category: string;
+  subcategory?: string | null;
   date: string;
   tags?: string[];
   splitAmount?: string;

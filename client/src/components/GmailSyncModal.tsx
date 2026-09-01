@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { X, Mail, Loader2, CheckCircle, Trash2, Pencil, TrendingDown, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
-import { CategoryIcon, CATEGORIES } from "./CategoryIcon";
+import { CategoryIcon, CATEGORIES, SUBCATEGORIES } from "./CategoryIcon";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -79,7 +79,7 @@ export function GmailSyncModal({ open, onClose }: Props) {
       date: tx.date,
       incomeSource: tx.incomeSource,
       splitAmount: tx.splitAmount,
-      ...(tx.type === "debit" ? { cardLast4: tx.cardLast4 ?? null } : {}),
+      ...(tx.type === "debit" ? { cardLast4: tx.cardLast4 ?? null, subcategory: tx.subcategory ?? null } : {}),
     });
   };
 
@@ -336,6 +336,7 @@ interface TxRowProps {
 function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, saveEdit, handleDelete, fmt, cards }: TxRowProps) {
   // undefined = untouched (fall back to the staged value); null = explicitly cleared.
   const selectedCard = editForm.cardLast4 !== undefined ? editForm.cardLast4 : (tx.cardLast4 ?? null);
+  const selectedSubcategory = editForm.subcategory !== undefined ? editForm.subcategory : (tx.subcategory ?? null);
   const isCredit = tx.type === "credit";
 
   if (editingId === tx.tempId) {
@@ -412,7 +413,7 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
             <div className="flex flex-wrap gap-1.5">
               {CATEGORIES.map(cat => (
                 <button key={cat} type="button"
-                  onClick={() => setEditForm(f => ({ ...f, category: cat }))}
+                  onClick={() => setEditForm(f => ({ ...f, category: cat, subcategory: null }))}
                   className={cn(
                     "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
                     (editForm.category ?? tx.category) === cat
@@ -421,6 +422,28 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
                   )}
                 >
                   {cat}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Subcategory (debits only, when the selected category has any) */}
+        {!isCredit && SUBCATEGORIES[editForm.category ?? tx.category]?.length > 0 && (
+          <div className="flex items-start gap-3">
+            <span className="text-[12px] text-muted-foreground w-24 shrink-0 pt-1.5">Subcategory</span>
+            <div className="flex flex-wrap gap-1.5">
+              {SUBCATEGORIES[editForm.category ?? tx.category].map(sub => (
+                <button key={sub} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, subcategory: selectedSubcategory === sub ? null : sub }))}
+                  className={cn(
+                    "px-3 py-1.5 rounded-xl text-[12px] font-medium transition-colors",
+                    selectedSubcategory === sub
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70"
+                  )}
+                >
+                  {sub}
                 </button>
               ))}
             </div>
@@ -504,7 +527,7 @@ function TxRow({ tx, editingId, editForm, setEditForm, startEdit, cancelEdit, sa
           {format(new Date(tx.date + "T00:00:00"), "dd MMM yyyy")} ·{" "}
           {isCredit
             ? INCOME_SOURCES.find(s => s.value === tx.incomeSource)?.label ?? "Other"
-            : tx.category}
+            : `${tx.category}${tx.subcategory ? ` · ${tx.subcategory}` : ""}`}
         </p>
         {!isCredit && tx.splitAmount > 0 && (
           <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
