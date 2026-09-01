@@ -86,11 +86,14 @@ export const SUBCATEGORIES: Record<string, string[]> = {
   Miscellaneous: ["Gifts", "Leisure", "Quick Commerce", "Travel"],
 };
 
-// Shades of each parent category's hue, for the Dashboard drill-down pie only.
-// "Uncategorized" (an expense in this category with no subcategory set) uses
-// the parent's own CATEGORY_HEX value so it reads as "the category, unsplit."
+// Deliberately distinct hues per subcategory (not shades of the parent's hue)
+// so slices stay tellable apart in the Dashboard drill-down pie. Colors may
+// repeat across different categories since only one drill-down is shown at a
+// time. "Uncategorized" (an expense in this category with no subcategory set)
+// still uses the parent's own CATEGORY_HEX, so no subcategory here reuses that
+// exact hue or a close neighbor of it.
 export const SUBCATEGORY_HEX: Record<string, Record<string, string>> = {
-  Food: { "Cafe/Restaurant": "#FB923C", "Home Delivery": "#EA580C" },
-  Amenities: { Subscriptions: "#60A5FA", "Car Expenses": "#3B82F6", "Self-Care": "#2563EB", Electronics: "#1D4ED8" },
-  Miscellaneous: { Gifts: "#5EEAD4", Leisure: "#2DD4BF", "Quick Commerce": "#14B8A6", Travel: "#0D9488" },
+  Food: { "Cafe/Restaurant": "#6366F1", "Home Delivery": "#84CC16" },
+  Amenities: { Subscriptions: "#F59E0B", "Car Expenses": "#F43F5E", "Self-Care": "#84CC16", Electronics: "#D946EF" },
+  Miscellaneous: { Gifts: "#F43F5E", Leisure: "#6366F1", "Quick Commerce": "#F59E0B", Travel: "#D946EF" },
 };

@@ -104,6 +104,8 @@ The Category Breakdown donut on Overview colors each slice by that category's ow
 
 Bar charts are unrelated to category color and use fixed fills: weekly totals use `hsl(var(--primary))`; the 6-month trend uses `#8B5CF6` (violet) to distinguish it from the primary-blue weekly bars.
 
+Clicking a category slice drills into its subcategory split, colored from `SUBCATEGORY_HEX` (same file). Unlike top-level categories, these are hand-picked distinct hues rather than shades of the parent's hue — a monochrome ramp reads as one color at this size. The synthesized "Uncategorized" bucket always uses the parent's own `CATEGORY_HEX`, so no subcategory hue is allowed to match or closely neighbor it.
+
 ### Category Icon Colors
 
 | Category | Background | Hex | Icon |
