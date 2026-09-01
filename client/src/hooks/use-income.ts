@@ -77,9 +77,18 @@ export function useDeleteIncome() {
       const res = await fetch(`/api/income/${id}`, { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error("Failed to delete income");
     },
-    onSuccess: () => {
+    onMutate: async (id: number) => {
+      await qc.cancelQueries({ queryKey: [INCOME_KEY] });
+      const previous = qc.getQueryData<Income[]>([INCOME_KEY]);
+      qc.setQueryData<Income[]>([INCOME_KEY], (old) => old?.filter((i) => i.id !== id) ?? old);
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData([INCOME_KEY], context.previous);
+      toast({ title: "Error", description: "Could not delete income", variant: "destructive" });
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: [INCOME_KEY] });
     },
-    onError: () => toast({ title: "Error", description: "Could not delete income", variant: "destructive" }),
   });
 }

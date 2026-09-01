@@ -121,16 +121,28 @@ export function useUpdateExpenseSplit() {
       if (!res.ok) throw new Error("Failed to update split amount");
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.expenses.list.path] });
+    onMutate: async ({ id, splitAmount }: { id: number; splitAmount: number }) => {
+      await queryClient.cancelQueries({ queryKey: [api.expenses.list.path] });
+      const previous = queryClient.getQueryData<ExpensesListResponse>([api.expenses.list.path]);
+      queryClient.setQueryData<ExpensesListResponse>(
+        [api.expenses.list.path],
+        (old) => old?.map((e) => (e.id === id ? { ...e, splitAmount } : e)) ?? old
+      );
+      return { previous };
     },
-    onError: () => {
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData([api.expenses.list.path], context.previous);
+      }
       toast({
         title: "Error",
         description: "Could not update the split amount.",
         variant: "destructive",
       });
-    }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: [api.expenses.list.path] });
+    },
   });
 }
 
@@ -161,9 +173,23 @@ export function useSetBudget() {
       if (!res.ok) throw new Error("Failed to set budget");
       return res.json();
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/budgets', variables.month] });
+    onMutate: async ({ month, amount }: { month: string; amount: number }) => {
+      await queryClient.cancelQueries({ queryKey: ['/api/budgets', month] });
+      const previous = queryClient.getQueryData(['/api/budgets', month]);
+      queryClient.setQueryData(['/api/budgets', month], (old: any) => ({ ...(old ?? {}), month, amount }));
+      return { previous, month };
+    },
+    onError: (_err, _vars, context) => {
+      if (context) {
+        queryClient.setQueryData(['/api/budgets', context.month], context.previous);
+      }
+      toast({ title: "Error", description: "Could not update the budget.", variant: "destructive" });
+    },
+    onSuccess: () => {
       toast({ title: "Budget updated" });
+    },
+    onSettled: (_data, _err, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/budgets', variables.month] });
     },
   });
 }
@@ -183,15 +209,27 @@ export function useDeleteExpense() {
       
       if (!res.ok) throw new Error("Failed to delete expense");
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.expenses.list.path] });
+    onMutate: async (id: number) => {
+      await queryClient.cancelQueries({ queryKey: [api.expenses.list.path] });
+      const previous = queryClient.getQueryData<ExpensesListResponse>([api.expenses.list.path]);
+      queryClient.setQueryData<ExpensesListResponse>(
+        [api.expenses.list.path],
+        (old) => old?.filter((e) => e.id !== id) ?? old
+      );
+      return { previous };
     },
-    onError: () => {
+    onError: (_err, _id, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData([api.expenses.list.path], context.previous);
+      }
       toast({
         title: "Error",
         description: "Could not delete this expense.",
         variant: "destructive",
       });
-    }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: [api.expenses.list.path] });
+    },
   });
 }

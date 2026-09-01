@@ -142,11 +142,24 @@ export default function Investments() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await fetch(`/api/investments/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/investments/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete investment");
+    },
+    onMutate: async (id: number) => {
+      await qc.cancelQueries({ queryKey: ["/api/investments"] });
+      const previous = qc.getQueryData<Investment[]>(["/api/investments"]);
+      qc.setQueryData<Investment[]>(["/api/investments"], (old) => old?.filter((i) => i.id !== id) ?? old);
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(["/api/investments"], context.previous);
+      toast({ title: "Error", description: "Could not delete this investment.", variant: "destructive" });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/investments"] });
       toast({ title: "Deleted" });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/investments"] });
     },
   });
 
@@ -164,11 +177,29 @@ export default function Investments() {
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
+    onMutate: async ({ inv, skip }: { inv: Investment; skip: boolean }) => {
+      await qc.cancelQueries({ queryKey: ["/api/investments"] });
+      const previous = qc.getQueryData<Investment[]>(["/api/investments"]);
+      qc.setQueryData<Investment[]>(["/api/investments"], (old) =>
+        old?.map((i) => {
+          if (i.id !== inv.id) return i;
+          const current = i.skippedMonths ?? [];
+          const skippedMonths = skip ? [...current, currentMonthStr] : current.filter((m) => m !== currentMonthStr);
+          return { ...i, skippedMonths };
+        }) ?? old
+      );
+      return { previous };
+    },
+    onError: (e: Error, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["/api/investments"], context.previous);
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
     onSuccess: (_data, { skip }) => {
-      qc.invalidateQueries({ queryKey: ["/api/investments"] });
       toast({ title: skip ? `Skipped for ${currentMonthShort}` : `Included for ${currentMonthShort}` });
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/investments"] });
+    },
   });
 
   const currentMonthStr = format(new Date(), "yyyy-MM");

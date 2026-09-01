@@ -150,11 +150,24 @@ export default function Emis() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: number) => {
-      await fetch(`/api/emis/${id}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(`/api/emis/${id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to delete EMI");
+    },
+    onMutate: async (id: number) => {
+      await qc.cancelQueries({ queryKey: ["/api/emis"] });
+      const previous = qc.getQueryData<Emi[]>(["/api/emis"]);
+      qc.setQueryData<Emi[]>(["/api/emis"], (old) => old?.filter((e) => e.id !== id) ?? old);
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(["/api/emis"], context.previous);
+      toast({ title: "Error", description: "Could not delete this EMI.", variant: "destructive" });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/emis"] });
       toast({ title: "Deleted" });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/emis"] });
     },
   });
 

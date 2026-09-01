@@ -138,7 +138,17 @@ export function History() {
     e.stopPropagation(); // don't open edit modal
     setDeletingIds(prev => new Set(prev).add(id));
     // let the exit animation finish before the row leaves the DOM
-    setTimeout(() => deleteExpense.mutate(id), 270);
+    setTimeout(() => {
+      deleteExpense.mutate(id, {
+        // rollback restores the row in the cache; also un-hide it locally so it
+        // doesn't stay invisible under the "forwards"-filled exit animation
+        onError: () => setDeletingIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        }),
+      });
+    }, 270);
   };
 
   if (isLoading) {

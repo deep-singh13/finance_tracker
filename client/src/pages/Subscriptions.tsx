@@ -133,10 +133,25 @@ export default function Subscriptions() {
   const [modal, setModal] = useState<"add" | Subscription | null>(null);
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: number) => { await fetch(`/api/subscriptions/${id}`, { method: "DELETE" }); },
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/subscriptions/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete subscription");
+    },
+    onMutate: async (id: number) => {
+      await qc.cancelQueries({ queryKey: ["/api/subscriptions"] });
+      const previous = qc.getQueryData<Subscription[]>(["/api/subscriptions"]);
+      qc.setQueryData<Subscription[]>(["/api/subscriptions"], (old) => old?.filter((s) => s.id !== id) ?? old);
+      return { previous };
+    },
+    onError: (_err, _id, context) => {
+      if (context?.previous) qc.setQueryData(["/api/subscriptions"], context.previous);
+      toast({ title: "Error", description: "Could not delete this subscription.", variant: "destructive" });
+    },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/subscriptions"] });
       toast({ title: "Subscription removed. It will no longer be added to monthly expenses." });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/subscriptions"] });
     },
   });
 
@@ -147,9 +162,25 @@ export default function Subscriptions() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive }),
       });
+      if (!res.ok) throw new Error("Failed to update subscription");
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/subscriptions"] }),
+    onMutate: async ({ id, isActive }: { id: number; isActive: boolean }) => {
+      await qc.cancelQueries({ queryKey: ["/api/subscriptions"] });
+      const previous = qc.getQueryData<Subscription[]>(["/api/subscriptions"]);
+      qc.setQueryData<Subscription[]>(
+        ["/api/subscriptions"],
+        (old) => old?.map((s) => (s.id === id ? { ...s, isActive } : s)) ?? old
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["/api/subscriptions"], context.previous);
+      toast({ title: "Error", description: "Could not update this subscription.", variant: "destructive" });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/subscriptions"] });
+    },
   });
 
   const activeSubs = subs.filter(s => s.isActive);

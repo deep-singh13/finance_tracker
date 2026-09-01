@@ -222,18 +222,49 @@ function CardPanel({ card, allExpenses }: { card: CardType; allExpenses: Expense
       if (!res.ok) throw new Error((await res.json()).message);
       return res.json();
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/cards"] }),
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onMutate: async ({ cycle, paid }: { cycle: Cycle; paid: boolean }) => {
+      await qc.cancelQueries({ queryKey: ["/api/cards"] });
+      const previous = qc.getQueryData<CardType[]>(["/api/cards"]);
+      qc.setQueryData<CardType[]>(["/api/cards"], (old) =>
+        old?.map((c) => {
+          if (c.id !== card.id) return c;
+          const current = c.paidStatements ?? [];
+          const paidStatements = paid ? [...current, cycle.key] : current.filter((k) => k !== cycle.key);
+          return { ...c, paidStatements };
+        }) ?? old
+      );
+      return { previous };
+    },
+    onError: (e: Error, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["/api/cards"], context.previous);
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ["/api/cards"] });
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      await fetch(`/api/cards/${card.id}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(`/api/cards/${card.id}`, { method: "DELETE", credentials: "include" });
+      if (!res.ok) throw new Error("Failed to delete card");
+    },
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ["/api/cards"] });
+      const previous = qc.getQueryData<CardType[]>(["/api/cards"]);
+      qc.setQueryData<CardType[]>(["/api/cards"], (old) => old?.filter((c) => c.id !== card.id) ?? old);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(["/api/cards"], context.previous);
+      toast({ title: "Error", description: "Could not delete this card.", variant: "destructive" });
     },
     onSuccess: () => {
+      toast({ title: "Card removed", description: "Its transactions were kept as regular expenses." });
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["/api/cards"] });
       qc.invalidateQueries({ queryKey: ["/api/expenses"] });
-      toast({ title: "Card removed", description: "Its transactions were kept as regular expenses." });
     },
   });
 
