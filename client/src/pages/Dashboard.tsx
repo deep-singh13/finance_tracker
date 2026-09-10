@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { format, isToday, parseISO, startOfWeek, startOfMonth, isAfter, isSameMonth, subWeeks, subMonths, getDaysInMonth, eachDayOfInterval, eachMonthOfInterval } from "date-fns";
-import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail, LogOut } from "lucide-react";
+import { Plus, AlertTriangle, TrendingUp, TrendingDown, Minus, CalendarClock, ArrowUpRight, ArrowDownRight, Target, Eye, EyeOff, Mail, LogOut, CreditCard as CreditCardIcon, ChevronRight } from "lucide-react";
+import { Link } from "wouter";
 import { useLogout } from "@/hooks/use-auth";
 import { useExpenses, useBudget, useSetBudget } from "@/hooks/use-expenses";
 import { useIncome } from "@/hooks/use-income";
@@ -28,8 +29,15 @@ import {
 import { cn } from "@/lib/utils";
 import { type ExpenseResponse } from "@shared/routes";
 import { monthSummary, netAmount } from "@shared/month";
-import type { Subscription, Investment, Emi } from "@shared/schema";
+import { cardSummary, daysUntilDue } from "@shared/card";
+import type { Subscription, Investment, Emi, Card as CardType } from "@shared/schema";
 import { formatPaise, toRupees, toPaiseOr } from "@shared/paise";
+
+function utilTone(pct: number) {
+  if (pct >= 90) return { bar: "bg-red-500", text: "text-red-600 dark:text-red-400", chip: "bg-red-500/15" };
+  if (pct >= 30) return { bar: "bg-amber-500", text: "text-amber-600 dark:text-amber-400", chip: "bg-amber-500/15" };
+  return { bar: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", chip: "bg-emerald-500/15" };
+}
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -125,6 +133,9 @@ export default function Dashboard() {
   const { data: emis } = useQuery<Emi[]>({
     queryKey: ["/api/emis"],
   });
+  const { data: cards } = useQuery<CardType[]>({
+    queryKey: ["/api/cards"],
+  });
 
   // Every month-scoped figure on this page follows `selectedMonth`.
   const [selectedMonth, setSelectedMonth] = useState(() => startOfMonth(new Date()));
@@ -202,6 +213,28 @@ export default function Dashboard() {
       s.isActive && s.lastBilledMonth !== selectedMonthStr && s.billingDay > todayDay
     );
   }, [subscriptions, selectedMonthStr]);
+
+  const cardSummaries = useMemo(() => {
+    if (!cards || !expenses) return [];
+    return cards
+      .filter(c => c.isActive)
+      .map(card => ({
+        card,
+        summary: cardSummary(card, expenses.filter(e => e.cardId === card.id)),
+      }));
+  }, [cards, expenses]);
+
+  const totalCardOutstanding = cardSummaries.reduce((sum, { summary }) => sum + summary.outstanding, 0);
+
+  const nearestCardDue = useMemo(() => {
+    let nearest: { dueIn: number; date: string } | null = null;
+    for (const { summary } of cardSummaries) {
+      if (!summary.lastStatement || summary.lastStatement.paid) continue;
+      const dueIn = daysUntilDue(summary.lastStatement.cycle);
+      if (nearest === null || dueIn < nearest.dueIn) nearest = { dueIn, date: summary.lastStatement.cycle.due };
+    }
+    return nearest;
+  }, [cardSummaries]);
 
   const fmt = (paise: number) => formatPaise(paise, { symbol: false });
 
@@ -401,10 +434,10 @@ export default function Dashboard() {
         )}
 
         {/* ── Desktop: 2-col grid · Mobile: single column ───────────── */}
-        <div className="space-y-5 md:grid md:grid-cols-2 md:gap-6 md:space-y-0 md:items-start">
+        <div className="space-y-5 md:grid md:grid-cols-2 md:gap-6 md:space-y-0">
 
           {/* ── Left column ─────────────────────────────────────────── */}
-          <div className="space-y-5">
+          <div className="space-y-5 md:flex md:flex-col">
             {/* Net Cash Flow */}
             {monthlyIncomeTotal > 0 && (
               <div className={cn(
@@ -584,6 +617,66 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Cards outstanding balance — flex-1 so it stretches to match the right column's height */}
+            {cardSummaries.length > 0 && (
+              <Link href="/cards" className="block md:flex-1">
+                <div className="bg-card rounded-2xl border border-border/50 shadow-sm cursor-pointer hover:border-border transition-colors h-full flex flex-col">
+                  <div className="px-5 pt-4 pb-3 border-b border-border/40 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <CreditCardIcon className="w-4 h-4 text-primary" />
+                      <p className="section-label">Cards</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-[12px] font-medium text-muted-foreground">
+                      Manage <ChevronRight className="w-3.5 h-3.5" />
+                    </div>
+                  </div>
+                  <div className="px-5 pt-4 pb-2 flex items-baseline justify-between">
+                    <div>
+                      <p className="text-[11px] text-muted-foreground uppercase tracking-wider mb-1">Total Outstanding</p>
+                      <p className="text-[22px] font-bold text-foreground">
+                        {isPrivate ? "••••••" : `₹${fmt(totalCardOutstanding)}`}
+                      </p>
+                    </div>
+                    <p className={cn(
+                      "text-[13px] font-medium",
+                      nearestCardDue === null ? "text-muted-foreground"
+                        : nearestCardDue.dueIn < 0 ? "text-red-600 dark:text-red-400"
+                        : nearestCardDue.dueIn <= 5 ? "text-amber-600 dark:text-amber-400"
+                        : "text-muted-foreground"
+                    )}>
+                      {nearestCardDue === null ? "No dues"
+                        : nearestCardDue.dueIn < 0 ? `Overdue by ${Math.abs(nearestCardDue.dueIn)}d`
+                        : nearestCardDue.dueIn === 0 ? "Due today"
+                        : `Due in ${nearestCardDue.dueIn}d · ${format(parseISO(nearestCardDue.date), "d MMM")}`}
+                    </p>
+                  </div>
+                  <div className="divide-y divide-border/40">
+                    {cardSummaries.map(({ card, summary }) => {
+                      const tone = summary.utilization !== null ? utilTone(summary.utilization) : null;
+                      return (
+                        <div key={card.id} className="flex items-center justify-between px-5 py-3.5">
+                          <div className="min-w-0">
+                            <p className="text-[14px] font-medium text-foreground truncate">{card.name}</p>
+                            <p className="text-[12px] text-muted-foreground">•••• {card.last4}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {tone && (
+                              <span className={cn("text-[11px] font-semibold px-2 py-0.5 rounded-full", tone.chip, tone.text)}>
+                                {summary.utilization!.toFixed(0)}%
+                              </span>
+                            )}
+                            <span className="text-[14px] font-semibold text-foreground whitespace-nowrap">
+                              {isPrivate ? "••••••" : `₹${fmt(summary.outstanding)}`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Link>
             )}
           </div>
 
