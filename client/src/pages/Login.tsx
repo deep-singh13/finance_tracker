@@ -20,7 +20,10 @@ function Slot(props: SlotProps) {
           : "border-border/60",
       )}
     >
-      {props.char ?? (
+      {/* Never render the digit itself — shoulder-surfing protection */}
+      {props.char ? (
+        <span className="w-3.5 h-3.5 rounded-full bg-foreground" aria-hidden />
+      ) : (
         <span className="w-2 h-2 rounded-full bg-muted-foreground/30" />
       )}
       {props.hasFakeCaret && (
@@ -114,6 +117,8 @@ export default function Login({ onSuccess }: LoginProps) {
         >
           <OTPInput
             maxLength={4}
+            inputMode="numeric"
+            autoComplete="off"
             value={pin}
             onChange={setPin}
             disabled={loading}

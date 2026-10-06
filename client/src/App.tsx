@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -103,9 +103,44 @@ function Router() {
   );
 }
 
+// Popup shown between a successful PIN and the first screen's data arriving.
+// Queries start in effects after the app mounts, so wait a beat before checking
+// that nothing is in flight; the cap keeps a hung request from trapping the user.
+function EnteringOverlay({ onDone }: { onDone: () => void }) {
+  useEffect(() => {
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed > 8000 || (elapsed > 400 && queryClient.isFetching() === 0)) {
+        clearInterval(id);
+        onDone();
+      }
+    }, 100);
+    return () => clearInterval(id);
+  }, [onDone]);
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/70 backdrop-blur-md animate-in fade-in duration-200"
+    >
+      <div className="glass-card px-10 py-8 flex flex-col items-center gap-4">
+        <div className="w-14 h-14 bg-primary/10 rounded-3xl flex items-center justify-center">
+          <span className="text-2xl">💰</span>
+        </div>
+        <div className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        <p className="text-[13px] font-medium text-muted-foreground">Loading your dashboard…</p>
+      </div>
+    </div>
+  );
+}
+
 // Shows a blank screen while checking auth, then Login or the app
 function AuthGuard() {
   const { authenticated, isLoading } = useAuth();
+  const [entering, setEntering] = useState(false);
+  const finishEntering = useCallback(() => setEntering(false), []);
 
   if (isLoading) {
     return (
@@ -119,13 +154,19 @@ function AuthGuard() {
     return (
       <Login
         onSuccess={() => {
+          setEntering(true);
           queryClient.setQueryData(["/api/auth/me"], true);
         }}
       />
     );
   }
 
-  return <Router />;
+  return (
+    <>
+      <Router />
+      {entering && <EnteringOverlay onDone={finishEntering} />}
+    </>
+  );
 }
 
 function App() {
