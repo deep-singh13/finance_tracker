@@ -9,10 +9,13 @@ The app URL and optional API key come from environment variables. Read them now:
 - `FINANCE_TRACKER_URL` — base URL of the deployed app (e.g. `https://finance-tracker.onrender.com`). If not set, use `http://localhost:5000`.
 - `SYNC_API_KEY` — optional; if set, include it as the `X-Sync-Key` request header.
 
+**Second target — mobile API:** also stage to `https://finance-mobile-api.jitter-upswing6x.workers.dev`, a separate deployment (Cloudflare Worker) that the mobile app reads from. It shares the same underlying data (confirmed: `lastSyncedAt` matches the Render app exactly) but has its own in-memory staging array, so a batch staged only on one side won't show up for someone reviewing on the other. Use the same `SYNC_API_KEY` value for its `X-Sync-Key` header too.
+
 ### 2 — Get last sync date
-Call `GET $FINANCE_TRACKER_URL/api/gmail/status`. Parse `lastSyncedAt` from the JSON response.
-- If `lastSyncedAt` is set, use it to build an `after:YYYY/MM/DD` Gmail query clause.
-- If null, default to `newer_than:90d`.
+Call `GET /api/gmail/status` on **both** targets — `$FINANCE_TRACKER_URL` and the mobile API — with the same `X-Sync-Key` header. Parse `lastSyncedAt` from each response and use whichever is **more recent** (the later timestamp) to build the `after:YYYY/MM/DD` Gmail query clause.
+- If both are null, default to `newer_than:90d`.
+- If only one is null, use the other's `lastSyncedAt`.
+- If the two differ, note both values when reporting results at the end (step 6) — a gap usually means someone committed on one side (web or mobile) without the other side's queue being reviewed yet.
 
 ### 3 — Search Gmail for transaction emails
 Use the Gmail MCP `search_threads` tool with **three separate queries** (adjust the `after:` date from step 2):
@@ -128,6 +131,8 @@ Keyword rules (case-insensitive on the merchant name):
 - **Amenities**: jio, airtel, bsnl, internet, broadband, electricity, gas, recharge, dth, water, bill, hospital, clinic, doctor, pharmacy, medical, apollo, medplus, gym, salon, ola, uber, rapido, metro, petrol, fuel, parking, nationalhighways, fastag, toll
 - **Miscellaneous**: blinkit, zepto, instamart, swiggy instamart (quick commerce), amazon, flipkart, shopping, hotel, flight, irctc, and everything else not matched above
 
+**Zepto VPA fallback**: for a UPI transaction, if the merchant name itself doesn't match `zepto` but the VPA address does (case-insensitive, e.g. `zepto.easebuzz@axisbank`, `zeptonow.easebuzz@kotakpay`), still classify as Miscellaneous > Quick Commerce — Zepto settles through multiple legal-entity names (e.g. `Commodum Groceries Private Limited`) that don't contain "zepto" themselves. Keep the merchant name from the parenthetical as the description; only the category/subcategory classification uses the VPA.
+
 ### Subcategory
 
 Entertainment never gets a subcategory. For the other three categories, set an optional `subcategory`
@@ -169,12 +174,13 @@ The card's outstanding balance is derived from its own transactions, so nothing 
 
 ### 5 — POST to the staging API
 
-Batch all parsed transactions in a single request to the **staging** endpoint (not sync):
+Batch all parsed transactions in a single request to the **staging** endpoint (not sync) — and send the **same payload to both targets**:
 
 ```
 POST $FINANCE_TRACKER_URL/api/gmail/stage
+POST https://finance-mobile-api.jitter-upswing6x.workers.dev/api/gmail/stage
 Content-Type: application/json
-X-Sync-Key: $SYNC_API_KEY   ← only if SYNC_API_KEY is set
+X-Sync-Key: $SYNC_API_KEY   ← only if SYNC_API_KEY is set; same value for both targets
 
 {
   "transactions": [
@@ -189,7 +195,7 @@ X-Sync-Key: $SYNC_API_KEY   ← only if SYNC_API_KEY is set
 
 `subcategory` is optional too — omit it entirely rather than guessing when no keyword rule confidently applies (see the third example above, an Amazon purchase with no confident subcategory match).
 
-The server automatically filters out transactions already in the database.
+Each server automatically filters out transactions already in its own database — since the two deployments have separate in-memory staging arrays, stage to both even when one call's response shows fewer new rows than the other.
 
 ### 6 — Report results
 
@@ -197,10 +203,12 @@ Print a summary like:
 ```
 ✅ Gmail sync staged for review
    Fetched : 42 emails  (HDFC 30, SBI Card 12)
-   Staged  : 12 new transactions (ready to review in the app)
+   Staged  : 12 new transactions — Render: 12, Mobile API: 12
    Skipped : 30 (already in DB, duplicates, or card bill payments)
 
 Open the finance tracker and click "Sync Gmail" to review and approve.
 ```
+
+If the two targets' staged counts differ, say so explicitly — it usually means one side already had a pending batch that got replaced.
 
 If the request fails, show the error message from the response body.
