@@ -8,6 +8,7 @@ import {
   stagedEditSchema,
   type StagedTransaction,
   type StagedEdit,
+  type ParsedTransaction,
 } from "@shared/gmail";
 import { z } from "zod";
 import { requireAuth, handleLogin, handleLogout, handleMe, loginRateLimiter } from "./auth";
@@ -24,6 +25,36 @@ function checkSyncKey(req: Request, res: Response): boolean {
     return false;
   }
   return true;
+}
+
+// Forwards a staged batch to the mobile app's Worker, server-to-server, so the
+// /sync-gmail skill (which runs unattended with Gmail access) only ever talks
+// to this app and never needs the Worker's URL or key. The Worker dedupes and
+// replaces its own queue the same way this route does, so we forward the full
+// parsed batch, not the already-deduped `newTxs`. Never throws — a Worker
+// outage must not fail the Render response.
+async function forwardToMobileApi(
+  transactions: ParsedTransaction[]
+): Promise<{ staged: number; total: number } | { error: string }> {
+  const mobileApiUrl = process.env.MOBILE_API_URL;
+  if (!mobileApiUrl) return { error: "MOBILE_API_URL not set" };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 9000);
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (process.env.SYNC_API_KEY) headers["X-Sync-Key"] = process.env.SYNC_API_KEY;
+    const res = await fetch(`${mobileApiUrl}/api/gmail/stage`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ transactions }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+    if (!res.ok) return { error: `Worker responded ${res.status}` };
+    const body = (await res.json()) as { staged: number; total: number };
+    return { staged: body.staged, total: body.total };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "forward failed" };
+  }
 }
 
 export async function registerRoutes(
@@ -95,7 +126,8 @@ export async function registerRoutes(
         if (!exists) newTxs.push({ tempId: randomUUID(), ...tx });
       }
       staged = newTxs;
-      return res.json({ staged: newTxs.length, total: transactions.length });
+      const mobile = await forwardToMobileApi(transactions);
+      return res.json({ staged: newTxs.length, total: transactions.length, mobile });
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       throw err;
